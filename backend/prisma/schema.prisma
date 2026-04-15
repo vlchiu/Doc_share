@@ -1,0 +1,95 @@
+// Khai báo client
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Khai báo kết nối database
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. Bảng Users (Người dùng)
+model User {
+  id             Int             @id @default(autoincrement())
+  name           String
+  email          String          @unique
+  password       String
+  avatar_url     String?
+  role           Role            @default(USER)
+  created_at     DateTime        @default(now())
+  
+  // Quan hệ: 1 User có nhiều tài liệu, bình luận và tài liệu đã lưu
+  documents      Document[]      
+  comments       Comment[]       
+  saved_docs     SavedDocument[] 
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// 2. Bảng Categories (Danh mục)
+model Category {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  documents   Document[] 
+}
+
+// 3. Bảng Documents (Tài liệu)
+model Document {
+  id             Int             @id @default(autoincrement())
+  title          String
+  description    String?
+  file_url       String
+  file_type      String
+  doc_type       String          @default("Chung") // THÊM DÒNG NÀY (Hardware, Software,...)
+  view_count     Int             @default(0)
+  download_count Int             @default(0)
+  status         Status          @default(PENDING)
+  created_at     DateTime        @default(now())
+
+  // Khóa ngoại trỏ về User
+  user_id        Int
+  user           User            @relation(fields: [user_id], references: [id])
+  
+  // Khóa ngoại trỏ về Category
+  category_id    Int
+  category       Category        @relation(fields: [category_id], references: [id])
+
+  comments       Comment[]
+  saved_by       SavedDocument[]
+}
+
+enum Status {
+  PENDING
+  APPROVED
+}
+
+// 4. Bảng Comments (Bình luận)
+model Comment {
+  id          Int      @id @default(autoincrement())
+  content     String
+  created_at  DateTime @default(now())
+
+  user_id     Int
+  user        User     @relation(fields: [user_id], references: [id])
+  
+  document_id Int
+  document    Document @relation(fields: [document_id], references: [id])
+}
+
+// 5. Bảng SavedDocument (Tài liệu đã lưu - Pivot table)
+model SavedDocument {
+  user_id     Int
+  user        User     @relation(fields: [user_id], references: [id])
+  
+  document_id Int
+  document    Document @relation(fields: [document_id], references: [id])
+  
+  saved_at    DateTime @default(now())
+
+  // Khóa chính kết hợp từ user_id và document_id
+  @@id([user_id, document_id]) 
+}
