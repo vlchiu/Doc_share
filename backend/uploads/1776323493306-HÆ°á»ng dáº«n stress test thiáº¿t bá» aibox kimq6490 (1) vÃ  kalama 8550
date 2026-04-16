@@ -1,0 +1,201 @@
+#### Truy cập vào thiết bị thông qua SSH và tiến hành cài đặt các gói dưới đây ####
+ssh root@<IP>
+pass: oelinux123
+
+1. Cài đặt opencv   //thiết bị
+
+apt update
+apt-get install -y build-essential cmake unzip git pkg-config libjpeg-dev libpng-dev libtiff-dev libjsoncpp-dev libjson-glib-dev libgflags-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio libeigen3-dev libavcodec-dev libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev libgtk-3-dev libatlas-base-dev gfortran
+
+//tắt ip v6
+sysctl -w net.ipv6.conf.all.disable_ipv6=1
+
+wget http://ports.ubuntu.com/ubuntu-ports/pool/main/j/jasper/libjasper1_1.900.1-debian1-2.4ubuntu1.3_arm64.deb
+dpkg -i libjasper1_1.900.1-debian1-2.4ubuntu1.3_arm64.deb
+
+wget http://ports.ubuntu.com/ubuntu-ports/pool/main/j/jasper/libjasper-dev_1.900.1-debian1-2.4ubuntu1.3_arm64.deb
+dpkg -i libjasper-dev_1.900.1-debian1-2.4ubuntu1.3_arm64.deb
+
+cd /home/
+wget https://codeload.github.com/opencv/opencv/tar.gz/refs/tags/4.5.5 -O opencv-4.5.5.tar.gz
+tar -zxvf opencv-4.5.5.tar.gz
+cd ./opencv-4.5.5
+
+mkdir build && cd build
+
+cmake -D CMAKE_BUILD_TYPE=RELEASE \
+      -D CMAKE_INSTALL_PREFIX=/usr/local/opencv4.5 \
+      -D OPENCV_ENABLE_NONFREE=ON \
+      -D OPENCV_GENERATE_PKGCONFIG=YES \
+      -D WITH_QT=ON \
+      -D WITH_OPENGL=ON \
+      -D BUILD_EXAMPLES=OFF \
+      -D INSTALL_PYTHON_EXAMPLES=OFF \
+      ..
+
+
+2. Cài đặt snpe
+
+Giải nén file snpe.2.20.zip, yolo.zip
+
+adb connect <IP>   // nếu nhận devices thì không cần connect , xuống luôn adb root, adb remount, hoặc ssh root@ip
+adb root
+adb connect <IP>
+adb remount    ## gắn các phân vùng thành read-write 
+
+###
+ssh root@192.168.1.61 "mount -o remount,rw /"
+####
+
+///vào thư mục adb connect <Ip>, adb root,adb remount
+//vào thư mục chỗ giải nén làm các bước trên rồi export
+
+#######qcs8550 thì kéo xuống dưới export############
+
+export SNPE_ROOT=/media/hsptek/data/aistack/snpe/2.20.0.240223 #thay đổi theo đường dẫn giải nén trước đó 
+
+export SNPE_ROOT=/home/namth/Desktop/hoainam/v2.31.0.250130 //đường dẫn đã đổi
+hoặc export SNPE_ROOT=/media/namth/data/Projects/stresstest/v2.31.0.250130
+
+export ARM_ARCH=aarch64-ubuntu-gcc9.4
+
+//thư mục
+adb push $SNPE_ROOT/lib/$ARM_ARCH/* /usr/lib/
+adb push $SNPE_ROOT/lib/hexagon-v68/unsigned/* /usr/lib/rfsa/adsp/
+adb push $SNPE_ROOT/bin/$ARM_ARCH/* /usr/bin/
+//
+
+###########NOTE ( không có adb thì scp qua ssh) #############
+
+# Push các file trong thư mục lib
+scp -O -r "$SNPE_ROOT/lib/$ARM_ARCH/"* root@192.168.1.61:/usr/lib/
+
+# Push các file hexagon
+scp -O -r "$SNPE_ROOT/lib/hexagon-v68/unsigned/"* root@192.168.1.61:/usr/lib/rfsa/adsp/
+
+# Push các file trong thư mục bin
+scp -O -r "$SNPE_ROOT/bin/$ARM_ARCH/"* root@192.168.1.61:/usr/bin/
+
+################################################
+
+
+///Giải nén yolo.zip thư mục
+export YOLO=/media/hsptek/haonc/may_ca_nhan/HSP/019_QCS6490/yolonas-demo #thay đổi theo đường dẫn giải nén trước đó
+
+export YOLO=/home/namth/Desktop/hoainam/yolonas-demo  //đường dẫn đã đổi
+hoặc export YOLO=/media/namth/data/Projects/stresstest/yolonas-demo
+
+//thư mục
+adb shell mkdir /data/SNPE2/ ;\
+adb push $YOLO/yolo_nas_s_v213_quantized.dlc /data/SNPE2/ ;\ 
+adb push $YOLO/yolov5m.labels /data/SNPE2/
+//
+
+#########NOTE##############
+///vào thiết bị tạo -->  mkdir /data/SNPE2/
+////xog mới scp ## push qua ssh 
+scp -O "$YOLO/yolo_nas_s_v213_quantized.dlc" root@192.168.1.61:/data/SNPE2/  
+scp -O "$YOLO/yolov5m.labels" root@192.168.1.61:/data/SNPE2/
+#############################
+
+3. Cài đặt iper3 trên box
+
+apt install iperf3 
+
+
+4. Chạy các bài stress test
+
+Tiến hành ssh vào thiết bị và chạy các bài sau đây, mỗi 1 bài là 1 terminal riêng để theo dõi
+
+- Chạy bài full tải dsp và gpu
+
+export DLC=/data/SNPE2/yolo_nas_s_v213_quantized.dlc  ### đã push vào thiết bị ở mục giải nén yolo.zip
+
+
+
+
+snpe-throughput-net-run \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_dsp \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_dsp \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_dsp \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_dsp \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_gpu \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_gpu \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_gpu \
+--container $DLC --duration 1000000 --perf_profile burst  --platform_options unsignedPD:ON --use_gpu
+
+####################################################NOTE###########################################
+- Chạy bài make để full tải CPU
+
+while true
+do
+  echo 1 >> /home/test.txt
+  cd /home/opencv-4.5.5/build
+  make -j8
+  make clean
+done
+####################################################################################################
+- Chạy bài test iperf3 để full tải network
+
+Trên máy tính: iperf3 -s
+
+Trên box: iperf3 -c <IP_máy tính> -t 0
+
+-chạy full cpu
+apt-get install stress
+stress --cpu  8
+
+stress --cpu (số luồng)
+
+apt update
+apt install htop
+
+### (thiết bị) chạy lệnh sau để xem nhiệt độ 
+
+while true
+do
+    echo "-----------------------------" >> temps_log.txt
+    date +"%Y-%m-%d %H:%M:%S" >> temps_log.txt
+    echo "thermal_zone23:" $(cat sys/class/thermal/thermal_zone23/temp) >> temps_log.txt
+    echo "thermal_zone24:" $(cat sys/class/thermal/thermal_zone24/temp) >> temps_log.txt
+    echo "thermal_zone25:" $(cat sys/class/thermal/thermal_zone25/temp) >> temps_log.txt
+    echo "thermal_zone26:" $(cat sys/class/thermal/thermal_zone26/temp) >> temps_log.txt
+    echo "thermal_zone27:" $(cat sys/class/thermal/thermal_zone27/temp) >> temps_log.txt
+    echo "thermal_zone28:" $(cat sys/class/thermal/thermal_zone28/temp) >> temps_log.txt
+    echo "thermal_zone29:" $(cat sys/class/thermal/thermal_zone29/temp) >> temps_log.txt
+    echo "thermal_zone30:" $(cat sys/class/thermal/thermal_zone30/temp) >> temps_log.txt
+    echo "thermal_zone61 (DDR):" $(cat sys/class/thermal/thermal_zone61/temp) >> temps_log.txt
+    echo "thermal_zone36 (PoP-Mem):" $(cat sys/class/thermal/thermal_zone36/temp) >> temps_log.txt
+    echo "" >> temps_log.txt
+    sleep 5
+done
+
+-->// mở terminal khác và chạy lệnh cat  để đọc file nhiệt độ temps_log.txt
+			cat temps_log.txt
+
+
+########################################   qcs8550  ###################################
+//thiết bị (mục 2)
+//vào thư mục chỗ giải nén làm các bước trên rồi export
+export SNPE_ROOT=/media/hsptek/data/aistack/qairt/2.33.0.250327  // đổi đường dẫn  
+
+export SNPE_ROOT=/home/namth/Desktop/hoainam/v2.31.0.250130 //đường dẫn đã đổi
+hoặc export SNPE_ROOT=/media/namth/data/Projects/stresstest/v2.31.0.250130
+
+export ARM_ARCH=aarch64-oe-linux-gcc11.2
+
+
+//thư mục
+adb push $SNPE_ROOT/lib/$ARM_ARCH/* /usr/lib/
+adb push $SNPE_ROOT/lib/hexagon-v73/unsigned/* /usr/lib/rfsa/adsp/
+adb push $SNPE_ROOT/bin/$ARM_ARCH/* /usr/bin/
+
+//thiết bị
+apt-get install stress
+stress --cpu 6
+
+
+#############
+export RTSP='rtsp://admin:Hsptek2024@192.168.1.243:554/Streaming/Channels/101'
+export XDG_RUNTIME_DIR=/run/user/root && gst-launch-1.0 --gst-debug=2,qtimlvdetection:6 qtivcomposer name=mixer sink_1::dimensions="<1920,1080>" ! queue \
+ ! waylandsink sync=true fullscreen=true rtspsrc location=$RTSP ! rtph264depay ! queue ! h264parse  ! qtivdec ! queue ! tee name=t ! queue ! mixer.

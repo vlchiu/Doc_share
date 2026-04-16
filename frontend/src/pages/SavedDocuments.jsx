@@ -33,43 +33,55 @@ function SavedDocuments() {
   const handleDownload = async (doc) => {
     try {
       await axiosClient.post(`/documents/${doc.id}/download`);
-      window.open(`http://localhost:5000${doc.file_url}`, '_blank');
+      const fileUrl = `http://localhost:5000${doc.file_url}`;
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const fileName = doc.file_url.split('/').pop() || doc.title;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
       setSavedDocs(savedDocs.map(d => d.id === doc.id ? { ...d, download_count: d.download_count + 1 } : d));
-    } catch (error) {}
+    } catch (error) { alert("❌ Lỗi khi tải file. Vui lòng thử lại!"); }
   };
 
-  return (
-    <div style={{ padding: '20px', color: '#333' }}>
-      <h2 style={{ color: '#555' }}>🔖 Tài liệu đã lưu</h2>
-      <hr style={{ border: '1px solid #eee', marginBottom: '20px' }} />
+  const btnStyle = { padding: '10px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+  return (
+    <div style={{ padding: '30px 20px', color: '#1e293b' }}>
+      <h2 style={{ color: '#334155', fontSize: '28px', marginBottom: '20px' }}>🔖 Tài liệu đã lưu</h2>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '25px' }}>
         {savedDocs.length === 0 ? (
-          <p style={{ color: '#777' }}>Chưa có tài liệu lưu trữ.</p>
+          <p style={{ color: '#64748b' }}>Chưa có tài liệu lưu trữ.</p>
         ) : (
           savedDocs.map((doc) => (
-            <div key={doc.id} style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '8px', background: '#fff', display: 'flex', flexDirection: 'column' }}>
-              <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '18px' }}>{doc.title}</h3>
+            <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
+              <h3 style={{ margin: '0 0 15px 0', color: '#0f172a', fontSize: '18px', lineHeight: '1.4' }}>{doc.title}</h3>
               
-              <div style={{ fontSize: '13px', color: '#555', background: '#f9f9f9', padding: '10px', borderRadius: '6px', marginBottom: '15px' }}>
-                <p style={{ margin: '0 0 5px 0' }}>👤 Đăng bởi: <b>{doc.user?.name}</b></p>
-                <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #eee', paddingTop: '5px' }}>
-                  <span>👁️ Xem: {doc.view_count || 0}</span>
-                  <span>⬇️ Tải: {doc.download_count || 0}</span>
+              <div style={{ fontSize: '13px', color: '#475569', background: '#f8fafc', padding: '12px 15px', borderRadius: '12px', marginBottom: '20px' }}>
+                <p style={{ margin: '0 0 8px 0' }}>👤 Đăng bởi: <b style={{ color: '#0f172a' }}>{doc.user?.name}</b></p>
+                <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #e2e8f0', paddingTop: '8px', fontWeight: 'bold' }}>
+                  <span style={{ color: '#64748b' }}>👁️ Xem: {doc.view_count || 0}</span>
+                  <span style={{ color: '#3b82f6' }}>⬇️ Tải: {doc.download_count || 0}</span>
                 </div>
               </div>
 
-              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto' }}>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => handleView(doc)} style={{ flex: 1, padding: '10px', background: '#95a5a6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  <button onClick={() => handleView(doc)} style={{ ...btnStyle, flex: 1, background: '#e2e8f0', color: '#334155' }}>
                     👀 Xem
                   </button>
-                  <button onClick={() => handleDownload(doc)} style={{ flex: 1, padding: '10px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  <button onClick={() => handleDownload(doc)} style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff', boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' }}>
                     ⬇️ Tải xuống
                   </button>
                 </div>
                 
-                <button onClick={() => handleUnsave(doc.id)} style={{ width: '100%', padding: '10px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                <button onClick={() => handleUnsave(doc.id)} style={{ ...btnStyle, width: '100%', background: '#fee2e2', color: '#ef4444' }}>
                   ❌ Bỏ lưu
                 </button>
               </div>

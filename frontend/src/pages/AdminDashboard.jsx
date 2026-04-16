@@ -12,68 +12,69 @@ function AdminDashboard() {
     try {
       const res = await axiosClient.get('/documents/pending');
       setPendingDocs(res.data);
-    } catch (error) {
-      console.error("Lỗi lấy danh sách", error);
-    }
+    } catch (error) { console.error("Lỗi", error); }
   };
 
   const handleApprove = async (docId) => {
     try {
       await axiosClient.put(`/documents/${docId}/approve`);
       alert("✅ Đã duyệt tài liệu thành công!");
-      // Xóa tài liệu khỏi danh sách chờ
       setPendingDocs(pendingDocs.filter(doc => doc.id !== docId));
-    } catch (error) {
-      alert("❌ Lỗi khi duyệt!");
-    }
+    } catch (error) { alert("❌ Lỗi khi duyệt!"); }
   };
 
   const handleDelete = async (docId) => {
-    if (window.confirm("⚠️ Xóa từ chối tài liệu này?")) {
+    if (window.confirm("⚠️ QUYỀN ADMIN: Bạn có chắc chắn muốn xóa vĩnh viễn tài liệu này?")) {
       try {
         await axiosClient.delete(`/documents/${docId}`);
         setPendingDocs(pendingDocs.filter(doc => doc.id !== docId));
-      } catch (error) { alert("Lỗi khi xóa!"); }
+      } catch (error) { alert("❌ Lỗi khi xóa!"); }
     }
   };
 
-  return (
-    <div style={{ padding: '20px' }}>
-      <h2 style={{ textAlign: 'center', color: '#c0392b' }}>🛡️ Khu vực Quản trị (Admin)</h2>
-      <h3>Tài liệu chờ kiểm duyệt ({pendingDocs.length})</h3>
-      <hr style={{ marginBottom: '20px' }} />
+  const thStyle = { padding: '15px', textAlign: 'left', fontWeight: 'bold', color: '#64748b', fontSize: '13px', textTransform: 'uppercase' };
+  const tdStyle = { padding: '15px', borderBottom: '1px solid #e2e8f0' };
 
-      {pendingDocs.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#27ae60', fontWeight: 'bold' }}>🎉 Không có tài liệu nào đang chờ duyệt. Mọi thứ đều ổn!</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', boxShadow: '0 4px 8px rgba(0,0,0,0.05)' }}>
-          <thead>
-            <tr style={{ background: '#34495e', color: 'white', textAlign: 'left' }}>
-              <th style={{ padding: '15px' }}>Tên tài liệu</th>
-              <th style={{ padding: '15px' }}>Người đăng</th>
-              <th style={{ padding: '15px' }}>Ngày tải lên</th>
-              <th style={{ padding: '15px', textAlign: 'center' }}>Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pendingDocs.map(doc => (
-              <tr key={doc.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '15px', fontWeight: 'bold' }}>
-                  <a href={`http://localhost:5000${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#2980b9' }}>
-                    {doc.title}
-                  </a>
-                </td>
-                <td style={{ padding: '15px' }}>{doc.user?.name}</td>
-                <td style={{ padding: '15px' }}>{new Date(doc.created_at).toLocaleDateString('vi-VN')}</td>
-                <td style={{ padding: '15px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                  <button onClick={() => handleApprove(doc.id)} style={{ padding: '8px 15px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>✅ Duyệt</button>
-                  <button onClick={() => handleDelete(doc.id)} style={{ padding: '8px 15px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>❌ Xóa</button>
-                </td>
+  return (
+    <div style={{ padding: '30px 20px' }}>
+      <h2 style={{ textAlign: 'center', color: '#b91c1c', fontSize: '28px', marginBottom: '30px' }}>🛡️ Khu vực Quản trị (Admin)</h2>
+      
+      {/* THIẾT KẾ ISLAND BẢNG - Bo góc, đổ bóng, trên nền xám */}
+      <div style={{ background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}>
+        <h3 style={{ marginBottom: '20px', color: '#1a1a1a' }}>Tài liệu chờ kiểm duyệt ({pendingDocs.length})</h3>
+        
+        {pendingDocs.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#10b981', fontWeight: 'bold', padding: '30px 0' }}>🎉 Không có tài liệu nào đang chờ duyệt. Mọi thứ đều ổn!</p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th style={{ ...thStyle, borderTopLeftRadius: '8px', borderBottomLeftRadius: '8px' }}>Tên tài liệu</th>
+                <th style={thStyle}>Người đăng</th>
+                <th style={thStyle}>Ngày tải lên</th>
+                <th style={{ ...thStyle, textAlign: 'center', borderTopRightRadius: '8px', borderBottomRightRadius: '8px' }}>Hành động</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {pendingDocs.map(doc => (
+                <tr key={doc.id} style={{ transition: '0.2s' }}>
+                  <td style={{ ...tdStyle, fontWeight: 'bold' }}>
+                    <a href={`http://localhost:5000${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>
+                      {doc.title}
+                    </a>
+                  </td>
+                  <td style={tdStyle}>{doc.user?.name}</td>
+                  <td style={tdStyle}>{new Date(doc.created_at).toLocaleDateString('vi-VN')}</td>
+                  <td style={{ ...tdStyle, display: 'flex', gap: '8px', justifyContent: 'center', borderBottom: 'none' }}>
+                    <button onClick={() => handleApprove(doc.id)} style={{ padding: '8px 15px', background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✅ Duyệt</button>
+                    <button onClick={() => handleDelete(doc.id)} style={{ padding: '8px 15px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🗑️ Xóa</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

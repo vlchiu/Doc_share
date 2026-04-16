@@ -1,0 +1,97 @@
+################################# SETUP từ đầu cho máy tính mới cài Ubuntu ####################################################
+
+1. Cài đặt docker nếu chưa thực hiện
+sudo apt update
+sudo apt install docker.io
+
+2. (Option) Cài đặt docker để có thể chạy ở user thường mà ko cần sudo, cần logout và login lại sau khi setup, nếu không chạy lệnh này thì cần chạy các lệnh docker với quyền sudo
+
+sudo usermod -aG docker <your_user>  #(need logout and login)   //sudo usermod -aG docker namth
+
+3. Build images với Dockerfile
+git clone ssh://namth@192.168.1.55:29418/Docker
+cd Docker
+docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) -t hsptek:v1 - < Dockerfile-22.04
+docker run -it --privileged -v /home/hsptek/test:/home/hsptek/source hsptek:v1 # source_path là đường dẫn ae dự định lưu source
+
+4. Setup docker build enviroment (lưu ý các lệnh dưới đều chạy ở trong môi trường docker)
+
+sudo apt update
+sudo apt-get install lz4 zstd diffstat qemu-user-static xmlstarlet texinfo chrpath gcc-aarch64-linux-gnu libarchive-dev ssh libselinux1-dev fakechroot g++-aarch64-linux-gnu libiberty-dev qemu-user-static qemu-user g++ gawk gcc make libwayland-dev fakeroot libpam0g-dev binutils-dev util-linux uuid-dev liblz4-tool libxml-simple-perl libxml2-utils libc++-dev libstdc++-12-dev m4 unzip cpio wget build-essential zstd python3-pip libc6-i386 lib32stdc++6 binfmt-support gcc-arm-none-eabi binutils-arm-none-eabi kconfig-frontends python3-rosdep2 libgtest-dev python3-lxml libncurses5 scons qemu-user
+
+sudo rm -rf /lib/ld-linux-aarch64.so.1
+sudo ln -sf /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
+sudo ln -sf /bin/bash /bin/sh
+wget http://cz.archive.ubuntu.com/ubuntu/pool/universe/f/fakechroot/libfakechroot_2.20.1%2Bds-15_amd64.deb   
+sudo dpkg -i ./libfakechroot_2.20.1+ds-15_amd64.deb
+wget http://cz.archive.ubuntu.com/ubuntu/pool/universe/f/fakechroot/fakechroot_2.20.1%2Bds-15_all.deb
+sudo dpkg -i ./fakechroot_2.20.1+ds-15_all.deb
+
+pip3 install dtschema==2021.10
+pip3 install jsonschema==4.0.0
+pip3 install ruamel.yaml==0.17.17
+pip3 install requests
+
+5. Get source
+ssh-keygen
+cat ~/.ssh/id_rsa.pub -> Add key lên server gerrit
+
+git config --global user.name namth #change name
+git config --global user.email namth@hsptek.com #change email
+
+cd source  ### CẦN DI CHUYỂN ĐẾN THƯ MỤC NÀY ĐỂ LẤY SOURCE TƯƠNG ỨNG TRÊN SOURCE_PATH
+mkdir hlos
+cd hlos
+repo init -u ssh://namth@192.168.1.55:29418/QCS8550_UBUNTU/manifests -b r00015.1 #change account
+mkdir .repo/local_manifests
+cp .repo/manifests/kernel.xml .repo/manifests/framework.xml .repo/local_manifests/
+repo sync -c -j16
+
+6. Build
+
+#kernel
+
+export LTO=none
+cd ~/source
+cd src/kernel-5.15/kernel_platform
+export BUILD_CONFIG=msm-kernel/build.config.msm.kalama.lu  VARIANT=consolidate
+./build/build.sh -j8
+
+#hlos
+
+cd ~/source/hlos
+export MACHINE=kalama DISTRO=qti-distro-ubuntu-fullstack-debug
+source poky/qti-conf/set_bb_env.sh
+bitbake qti-ubuntu-robotics-image
+
+# mở 1 terminal docker khác
+docker ps -a # check thông tin các container đang có, để ý container đang up
+docker exec -it <container_id> bash # mở terminal khác
+
+# NOTE
+Ae vẫn có thể mở và chỉnh sửa source code trên máy host Ubuntu bình thường
+
+################################ Tạo container mới ######################################################################
+
+# Trên server có sẵn image hsptek:v1 rồi nên không cần build images nữa
+- Tạo 1 container với images có sẵn hsptek:v1, mount vào ổ chức source code hlos vừa lấy về
+	docker run -it --privileged -v /media/bsp/data/hlos:/home/hsptek/source hsptek:v1
+		Lưu ý: /media/bsp/data/hlos là đường dẫn source code ubuntu trên máy tính
+				/home/hsptek/source là đường dẫn source ở trên docker
+- Sau khi chạy docker run, terminal sẽ truy cập vào shell trên docker,
+	cd source -> Truy cập vào source code hlos
+
+Lưu ý chỉ chạy docker run 1 lần duy nhất (mỗi lần chạy sẽ tạo ra 1 container id khác, không cần thiết) để tạo container, sau đó để truy cập vào container đó thì ta dùng lệnh :
+
+	docker ps -a    # tìm container đang up, check container ID
+	docker exec -it <container_id> bash
+
+- Tiến hành setup môi trường và build như mục "4. Setup docker build enviroment (lưu ý các lệnh dưới đều chạy ở trong môi trường docker)"
+- Chạy build theo hướng dẫn mục "6. Build"
+
+- Để build lại 1 gói package nào đó ta dùng lệnh:
+	bitbake -v -fc clean <package> # clean đi dữ liệu cũ
+	bitbake -v <package> # build lại
+
+Ví dụ: sau khi chỉnh sửa 1 số package, cần build lại full OS để cập nhật vào bản images cuối, ta dùng lệnh:
+	bitbake -v -fc clean qti-ubuntu-robotics-image; bitbake qti-ubuntu-robotics-image

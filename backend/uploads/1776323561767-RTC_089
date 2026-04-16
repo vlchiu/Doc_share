@@ -1,0 +1,62 @@
+
+###########################
+
+
+sửa trong qcs6490-addons-rb3gen2.dtsi 
+
+i2c0 {
+thêm 
+     pcf8563: rtc@51 {
+	compatible = "nxp,pcf8563";
+	reg = <0x51>;
+	
+	status = "okay";
+	};	
+	
+	
+############
+
+
+disable rtc pmic  ở  //arch/arm64/boot/dts/qcom/qcs6490-rb3gen2.dts
+
+&pmk8350_rtc {
+	status = "okay";
+	//status = "disabled";//
+};
+
+#####################
+
+
+cấu hình CONFIG_RTC_DRV_PCF8563=y/m    tại /arch/arm64/config/qcom_defconfig
+
+########## check nguồn trong schematic và assembly
+####cấu hình trong qcs6490-addons-rb3gen2.dtsi
+
+vcc_1v8_vreg: vcc_1v8_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_1v8_vreg";
+		gpio = <&tlmm 172 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		regulator-always-on;
+
+Tắt time services --> đồng bộ time hệ thống với time rtc
+
+/089/hlos/layers/meta-qcom-hwe/recipes-bsp/packagegroups/backgroup-qcom-core.bb
+Sửa TIMESERVICES ?= 'True'  --> TIMESERVICES ?= 'False'
+
+
+
+
+###########build lại 
+
+bitbake linux-qcom-custom -c clean && DEBUG_BUILD=1 devtool build linux-qcom-custom
+bitbake qcom-multimedia-image -c clean && DEBUG_BUILD=1 devtool build-image qcom-multimedia-image
+
+
+
+nạp provision
+image tại : 089/hlos/build/tmp-glibc/deploy/images/qcs6490/qcom-image 
+
+
