@@ -39,15 +39,14 @@ const login = async (req, res) => {
 
     // 1. Tìm user theo email
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(400).json({ message: "Email hoặc mật khẩu không đúng!" });
-    }
+    if (!user) return res.status(400).json({ message: "Email hoặc mật khẩu không đúng!" });
 
-    // 2. Kiểm tra mật khẩu
+    // 2. Kiểm tra tài khoản có bị khóa không
+    if (!user.is_active) return res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin." });
+
+    // 3. Kiểm tra mật khẩu
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Email hoặc mật khẩu không đúng!" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Email hoặc mật khẩu không đúng!" });
 
     // 3. Tạo Token (JWT)
     const token = jwt.sign(
@@ -100,5 +99,28 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// [PUT] Đổi mật khẩu
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+
+    if (!currentPassword || !newPassword) return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin" });
+    if (newPassword.length < 6) return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Mật khẩu hiện tại không đúng" });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+
+    res.json({ message: "Đổi mật khẩu thành công!" });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
 // Nhớ export thêm updateProfile nhé!
-module.exports = { register, login, getMe, updateProfile };
+module.exports = { register, login, getMe, updateProfile, changePassword };

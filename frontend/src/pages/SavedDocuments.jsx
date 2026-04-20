@@ -1,52 +1,43 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 function SavedDocuments() {
   const [savedDocs, setSavedDocs] = useState([]);
 
   useEffect(() => {
-    fetchSavedDocs();
+    axiosClient.get('/documents/saved').then(res => setSavedDocs(res.data)).catch(() => toast.error('Lỗi tải dữ liệu!'));
   }, []);
-
-  const fetchSavedDocs = async () => {
-    try {
-      const res = await axiosClient.get('/documents/saved');
-      setSavedDocs(res.data);
-    } catch (error) { console.error("Lỗi", error); }
-  };
 
   const handleUnsave = async (docId) => {
     try {
       await axiosClient.post(`/documents/${docId}/save`);
       setSavedDocs(savedDocs.filter(doc => doc.id !== docId));
-    } catch (error) { alert("Lỗi khi bỏ lưu"); }
+      toast('Đã bỏ lưu.');
+    } catch { toast.error('Lỗi khi bỏ lưu!'); }
   };
 
   const handleView = async (doc) => {
     try {
       await axiosClient.post(`/documents/${doc.id}/view`);
-      window.open(`http://localhost:5000${doc.file_url}`, '_blank');
-      setSavedDocs(savedDocs.map(d => d.id === doc.id ? { ...d, view_count: d.view_count + 1 } : d));
-    } catch (error) {}
+      window.open(`${API_URL}${doc.file_url}`, '_blank');
+    } catch {}
   };
 
   const handleDownload = async (doc) => {
     try {
       await axiosClient.post(`/documents/${doc.id}/download`);
-      const fileUrl = `http://localhost:5000${doc.file_url}`;
-      const response = await fetch(fileUrl);
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      const fileName = doc.file_url.split('/').pop() || doc.title;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-      setSavedDocs(savedDocs.map(d => d.id === doc.id ? { ...d, download_count: d.download_count + 1 } : d));
-    } catch (error) { alert("❌ Lỗi khi tải file. Vui lòng thử lại!"); }
+      const res = await fetch(`${API_URL}${doc.file_url}`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = doc.file_url.split('/').pop() || doc.title;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Đang tải xuống...');
+    } catch { toast.error('Lỗi khi tải file!'); }
   };
 
   const btnStyle = { padding: '10px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
@@ -57,7 +48,10 @@ function SavedDocuments() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '25px' }}>
         {savedDocs.length === 0 ? (
-          <p style={{ color: '#64748b' }}>Chưa có tài liệu lưu trữ.</p>
+          <div style={{ textAlign: 'center', padding: '60px 20px', gridColumn: '1/-1' }}>
+            <div style={{ fontSize: '56px', marginBottom: '12px' }}>🔖</div>
+            <p style={{ fontSize: '17px', color: '#64748b', fontWeight: '500' }}>Chưa có tài liệu nào được lưu.</p>
+          </div>
         ) : (
           savedDocs.map((doc) => (
             <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>

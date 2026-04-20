@@ -1,27 +1,45 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 function Profile() {
   const [user, setUser] = useState(null);
   const [newName, setNewName] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
-  const [preview, setPreview] = useState(null); // Để xem trước ảnh khi chọn
+  const [preview, setPreview] = useState(null);
+  const [docStats, setDocStats] = useState({ total: 0, approved: 0, pending: 0 });
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwMsg, setPwMsg] = useState(null);
 
-  const fetchUserData = async () => {
+  const getMe = async () => {
     const res = await axiosClient.get('/auth/me');
     setUser(res.data);
     setNewName(res.data.name);
   };
 
-  // Xử lý khi chọn ảnh
+  const getStats = async () => {
+    try {
+      const res = await axiosClient.get('/documents/mine');
+      const approved = res.data.filter(d => d.status === 'APPROVED').length;
+      const pending = res.data.filter(d => d.status === 'PENDING').length;
+      setDocStats({ total: res.data.length, approved, pending });
+    } catch {}
+  };
+
+  useEffect(() => {
+    getMe();
+    getStats();
+  }, []);
+
   const onFileChange = (e) => {
     const file = e.target.files[0];
     setSelectedFile(file);
-    setPreview(URL.createObjectURL(file)); // Tạo link tạm để hiện ảnh lên màn hình
+    setPreview(URL.createObjectURL(file));
   };
 
   const handleUpdate = async (e) => {
@@ -29,61 +47,84 @@ function Profile() {
     const formData = new FormData();
     formData.append('name', newName);
     if (selectedFile) formData.append('avatar', selectedFile);
-
     try {
       await axiosClient.put('/auth/update-profile', formData);
-      alert("✅ Cập nhật thông tin thành công!");
-      window.location.reload(); // Load lại để menu trên Navbar cũng cập nhật theo
+      toast.success('Cập nhật thông tin thành công!');
+      window.location.reload();
     } catch (error) {
-      alert("❌ Lỗi: " + error.response?.data?.message);
+      toast.error(error.response?.data?.message || 'Lỗi cập nhật!');
     }
   };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwMsg(null);
+    if (newPassword !== confirmPassword) return setPwMsg({ type: 'error', text: 'Mật khẩu xác nhận không khớp!' });
+    try {
+      await axiosClient.put('/auth/change-password', { currentPassword, newPassword });
+      setPwMsg({ type: 'success', text: '✅ Đổi mật khẩu thành công!' });
+      toast.success('Đổi mật khẩu thành công!');
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (error) {
+      setPwMsg({ type: 'error', text: '❌ ' + (error.response?.data?.message || 'Lỗi server') });
+      toast.error(error.response?.data?.message || 'Lỗi server!');
+    }
+  };
+
+  const inputStyle = { padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', width: '100%' };
+  const labelStyle = { fontWeight: 'bold', color: '#555', marginBottom: '5px', display: 'block' };
 
   if (!user) return <p>Đang tải...</p>;
 
   return (
-    <div style={{ maxWidth: '600px', margin: '40px auto', background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>⚙️ Thiết lập tài khoản</h2>
+    <div style={{ maxWidth: '600px', margin: '40px auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
-        {/* KHU VỰC AVATAR */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-          <div style={{ position: 'relative', width: '120px', height: '120px' }}>
-            <img 
-              src={preview || (user.avatar_url ? `http://localhost:5000${user.avatar_url}` : `https://ui-avatars.com/api/?name=${user.name}&background=random`)} 
-              alt="avatar" 
-              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '4px solid #f0f2f5' }}
-            />
-            <label htmlFor="avatar-input" style={{ position: 'absolute', bottom: '5px', right: '5px', background: '#3498db', color: '#fff', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '14px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
-              📷
-            </label>
-            <input id="avatar-input" type="file" hidden onChange={onFileChange} accept="image/*" />
+      {/* THÔNG TIN CÁ NHÂN */}
+      <div style={{ background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <h2 style={{ textAlign: 'center', marginBottom: '24px', color: '#1a1a1a' }}>⚙️ Thiết lập tài khoản</h2>
+        <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+            <div style={{ position: 'relative', width: '110px', height: '110px' }}>
+              <img src={preview || (user.avatar_url ? `${API_URL}${user.avatar_url}` : `https://ui-avatars.com/api/?name=${user.name}&background=random`)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '4px solid #e2e8f0' }} />
+              <label htmlFor="avatar-input" style={{ position: 'absolute', bottom: '4px', right: '4px', background: '#3b82f6', color: '#fff', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '13px' }}>📷</label>
+              <input id="avatar-input" type="file" hidden onChange={onFileChange} accept="image/*" />
+            </div>
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>Bấm icon camera để đổi ảnh</p>
           </div>
-          <p style={{ fontSize: '13px', color: '#888' }}>Bấm vào icon camera để thay đổi ảnh đại diện</p>
-        </div>
 
-        {/* THÔNG TIN CHI TIẾT */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontWeight: 'bold', color: '#555' }}>Email đăng ký (Không thể sửa):</label>
-          <input type="text" value={user.email} disabled style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', background: '#f9f9f9', color: '#888' }} />
-        </div>
+          <div><label style={labelStyle}>Email (không thể sửa):</label><input type="text" value={user.email} disabled style={{ ...inputStyle, background: '#f8fafc', color: '#888' }} /></div>
+          <div><label style={labelStyle}>Tên hiển thị:</label><input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} style={inputStyle} /></div>
+          <div><label style={labelStyle}>Ngày tham gia:</label><p style={{ margin: 0, color: '#666' }}>📅 {new Date(user.created_at).toLocaleDateString('vi-VN')}</p></div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontWeight: 'bold', color: '#555' }}>Tên hiển thị:</label>
-          <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #3498db', outline: 'none' }} />
-        </div>
+          {/* STATS */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {[
+              { label: 'Tổng tài liệu', value: docStats.total, color: '#dbeafe', text: '#1d4ed8' },
+              { label: 'Đã duyệt', value: docStats.approved, color: '#dcfce7', text: '#15803d' },
+              { label: 'Chờ duyệt', value: docStats.pending, color: '#fef9c3', text: '#a16207' },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, background: s.color, borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: s.text }}>{s.value}</div>
+                <div style={{ fontSize: '11px', color: s.text, marginTop: '2px' }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontWeight: 'bold', color: '#555' }}>Ngày tham gia:</label>
-          <p style={{ margin: 0, color: '#666' }}>📅 {new Date(user.created_at).toLocaleDateString('vi-VN')}</p>
-        </div>
+          <button type="submit" style={{ padding: '14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>Lưu thay đổi</button>
+        </form>
+      </div>
 
-        <button type="submit" style={{ marginTop: '10px', padding: '15px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>
-          Lưu thay đổi
-        </button>
-
-      </form>
+      {/* ĐỔI MẬT KHẨU */}
+      <div style={{ background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <h3 style={{ marginBottom: '20px', color: '#1a1a1a' }}>🔒 Đổi mật khẩu</h3>
+        <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div><label style={labelStyle}>Mật khẩu hiện tại:</label><input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={inputStyle} required /></div>
+          <div><label style={labelStyle}>Mật khẩu mới:</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputStyle} required /></div>
+          <div><label style={labelStyle}>Xác nhận mật khẩu mới:</label><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={inputStyle} required /></div>
+          {pwMsg && <p style={{ margin: 0, color: pwMsg.type === 'error' ? '#ef4444' : '#10b981', fontWeight: 'bold', fontSize: '14px' }}>{pwMsg.text}</p>}
+          <button type="submit" style={{ padding: '14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>Đổi mật khẩu</button>
+        </form>
+      </div>
     </div>
   );
 }

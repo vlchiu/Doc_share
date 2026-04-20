@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Upload from './pages/Upload';
@@ -8,7 +9,10 @@ import Profile from './pages/Profile';
 import MyDocuments from './pages/MyDocuments';
 import AdminDashboard from './pages/AdminDashboard';
 import SavedDocuments from './pages/SavedDocuments';
+import NotFound from './pages/NotFound';
+import DocumentDetail from './pages/DocumentDetail';
 import axiosClient from './api/axiosClient';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // component để theo dõi URL và đóng menu khi chuyển trang
 function LinkWithCloseMenu({ to, onClick, style, children }) {
@@ -30,6 +34,15 @@ function App() {
     }
   }, [isAuthenticated]);
 
+  // Đóng menu khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('#user-menu')) setShowMenu(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/login';
@@ -40,7 +53,7 @@ function App() {
 
   return (
     <Router>
-      {/* THAY ĐỔI: Phông nền toàn trang màu xám cực nhạt */}
+      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { borderRadius: '10px', fontWeight: '500' } }} />
       <div style={{ fontFamily: 'Inter, sans-serif', background: '#f8fafc', minHeight: '100vh', color: '#333' }}>
         
         {/* TẦNG 1 */}
@@ -53,10 +66,10 @@ function App() {
 
           <div>
             {isAuthenticated && user ? (
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }} id="user-menu">
                 <div onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '5px 10px', borderRadius: '30px' }}>
                   <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#cbd5e1', color: '#fff', fontWeight: 'bold', fontSize: '16px' }}>
-                    {user.avatar_url ? <img src={`http://localhost:5000${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.name.charAt(0).toUpperCase()}
+                    {user.avatar_url ? <img src={`${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.name.charAt(0).toUpperCase()}
                   </div>
                   <span style={{ fontWeight: 'bold', color: '#1a1a1a' }}>{user.name}</span>
                   <span style={{ fontSize: '12px', color: '#888' }}>▼</span>
@@ -108,13 +121,15 @@ function App() {
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '30px 20px' }}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/documents/:id" element={<DocumentDetail />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/my-documents" element={<MyDocuments />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/saved-documents" element={<SavedDocuments />} />
+            <Route path="/upload" element={<ProtectedRoute user={user}><Upload /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
+            <Route path="/my-documents" element={<ProtectedRoute user={user}><MyDocuments /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute user={user} adminOnly><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/saved-documents" element={<ProtectedRoute user={user}><SavedDocuments /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>

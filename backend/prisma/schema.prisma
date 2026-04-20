@@ -16,6 +16,7 @@ model User {
   password       String
   avatar_url     String?
   role           Role            @default(USER)
+  is_active      Boolean         @default(true)
   created_at     DateTime        @default(now())
   
   // Quan hệ: 1 User có nhiều tài liệu, bình luận và tài liệu đã lưu

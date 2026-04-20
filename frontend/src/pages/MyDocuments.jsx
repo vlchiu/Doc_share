@@ -1,99 +1,128 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
+import Spinner from '../components/Spinner';
 
 function MyDocuments() {
   const [myDocs, setMyDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [userRes, docsRes] = await Promise.all([
-          axiosClient.get('/auth/me'),
-          axiosClient.get('/documents')
-        ]);
-        const currentUser = userRes.data;
-        const filteredDocs = docsRes.data.filter(doc => doc.user_id === currentUser.id);
-        setMyDocs(filteredDocs);
-      } catch (error) { console.error('Lỗi tải dữ liệu', error); }
-    };
-    fetchData();
+    axiosClient.get('/documents/mine')
+      .then(res => setMyDocs(res.data))
+      .catch(() => toast.error('Lỗi tải dữ liệu!'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleUpdateTitle = async (docId, oldTitle) => {
-    const newTitle = prompt("Nhập tên mới:", oldTitle);
-    if (newTitle && newTitle !== oldTitle) {
-      try {
-        await axiosClient.put(`/documents/${docId}`, { title: newTitle });
-        setMyDocs(myDocs.map(doc => doc.id === docId ? { ...doc, title: newTitle } : doc));
-      } catch (error) { alert("Lỗi đổi tên!"); }
-    }
+  const startEdit = (doc) => {
+    setEditingId(doc.id);
+    setEditTitle(doc.title);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle('');
+  };
+
+  const handleSaveTitle = async (docId) => {
+    if (!editTitle.trim()) return toast.error('Tên không được để trống!');
+    try {
+      await axiosClient.put(`/documents/${docId}`, { title: editTitle.trim() });
+      setMyDocs(myDocs.map(doc => doc.id === docId ? { ...doc, title: editTitle.trim() } : doc));
+      toast.success('Đã cập nhật tên!');
+      cancelEdit();
+    } catch { toast.error('Lỗi đổi tên!'); }
   };
 
   const handleDelete = async (docId) => {
-    if (window.confirm("⚠️ Bạn có chắc chắn muốn xóa tài liệu này?")) {
-      try {
-        await axiosClient.delete(`/documents/${docId}`);
-        setMyDocs(myDocs.filter(doc => doc.id !== docId));
-      } catch (error) { alert("Lỗi khi xóa!"); }
-    }
+    if (!window.confirm('⚠️ Bạn có chắc chắn muốn xóa tài liệu này?')) return;
+    try {
+      await axiosClient.delete(`/documents/${docId}`);
+      setMyDocs(myDocs.filter(doc => doc.id !== docId));
+      toast.success('Đã xóa tài liệu!');
+    } catch { toast.error('Lỗi khi xóa!'); }
   };
 
   const handleUpdateFile = async (e, docId) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!window.confirm("🔄 Thay thế nội dung bằng file mới?")) {
-      e.target.value = null; 
-      return;
-    }
+    if (!window.confirm('🔄 Thay thế nội dung bằng file mới?')) { e.target.value = null; return; }
     const formData = new FormData();
     formData.append('file', file);
     try {
       await axiosClient.put(`/documents/${docId}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      alert("✅ Đã cập nhật file mới!");
-    } catch (error) { alert("❌ Lỗi tải file!"); }
+      toast.success('Đã cập nhật file mới!');
+    } catch { toast.error('Lỗi tải file!'); }
   };
 
-  const btnStyle = { padding: '10px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
+  const btnStyle = { padding: '9px 14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
+
+  if (loading) return <Spinner />;
 
   return (
-    <div style={{ padding: '30px 20px', color: '#1e293b' }}>
-      <h2 style={{ color: '#334155', fontSize: '28px', marginBottom: '20px' }}>📁 Tài liệu cá nhân</h2>
+    <div style={{ color: '#1e293b' }}>
+      <h2 style={{ color: '#334155', fontSize: '26px', marginBottom: '24px' }}>📁 Tài liệu của tôi</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '25px' }}>
-        {myDocs.length === 0 ? (
-          <p style={{ color: '#64748b' }}>Bạn chưa tải lên tài liệu nào.</p>
-        ) : (
-          myDocs.map((doc) => (
-            <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
-              <h3 style={{ margin: '0 0 15px 0', color: '#0f172a', fontSize: '18px', lineHeight: '1.4' }}>{doc.title}</h3>
-              
-              <div style={{ fontSize: '13px', color: '#475569', background: '#f8fafc', padding: '12px 15px', borderRadius: '12px', marginBottom: '20px' }}>
-                <p style={{ margin: '0 0 8px 0' }}>📁 Danh mục: <b style={{ color: '#0f172a' }}>{doc.category?.name}</b></p>
-                <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #e2e8f0', paddingTop: '8px', fontWeight: 'bold' }}>
-                  <span style={{ color: '#64748b' }}>👁️ Xem: {doc.view_count || 0}</span>
-                  <span style={{ color: '#3b82f6' }}>⬇️ Tải: {doc.download_count || 0}</span>
+      {myDocs.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <div style={{ fontSize: '56px', marginBottom: '12px' }}>📂</div>
+          <p style={{ fontSize: '17px', color: '#64748b', fontWeight: '500' }}>Bạn chưa tải lên tài liệu nào.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+          {myDocs.map(doc => (
+            <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+              {/* TITLE — inline edit */}
+              {editingId === doc.id ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    autoFocus
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(doc.id); if (e.key === 'Escape') cancelEdit(); }}
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '2px solid #3b82f6', outline: 'none', fontSize: '14px', fontWeight: 'bold' }}
+                  />
+                  <button onClick={() => handleSaveTitle(doc.id)} style={{ ...btnStyle, background: '#dcfce7', color: '#16a34a', padding: '8px 10px' }}>✓</button>
+                  <button onClick={cancelEdit} style={{ ...btnStyle, background: '#f1f5f9', color: '#64748b', padding: '8px 10px' }}>✕</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1.4, flex: 1 }}>{doc.title}</h3>
+                  <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '16px', padding: '2px', flexShrink: 0 }} title="Sửa tên">✏️</button>
+                </div>
+              )}
+
+              {/* BADGE TRẠNG THÁI */}
+              <span style={{ alignSelf: 'flex-start', padding: '3px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
+                background: doc.status === 'APPROVED' ? '#dcfce7' : '#fef9c3',
+                color: doc.status === 'APPROVED' ? '#16a34a' : '#ca8a04' }}>
+                {doc.status === 'APPROVED' ? '✅ Đã duyệt' : '⏳ Chờ duyệt'}
+              </span>
+
+              {/* META */}
+              <div style={{ fontSize: '13px', color: '#475569', background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}>
+                <div style={{ marginBottom: '6px' }}>📁 <b style={{ color: '#0f172a' }}>{doc.category?.name}</b> · 🏷️ {doc.doc_type}</div>
+                <div style={{ display: 'flex', gap: '16px', fontWeight: 'bold', borderTop: '1px solid #e2e8f0', paddingTop: '7px' }}>
+                  <span style={{ color: '#64748b' }}>👁️ {doc.view_count || 0}</span>
+                  <span style={{ color: '#3b82f6' }}>⬇️ {doc.download_count || 0}</span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => handleUpdateTitle(doc.id, doc.title)} style={{ ...btnStyle, flex: 1, background: '#fef3c7', color: '#d97706' }}>
-                    ✏️ Sửa tên
-                  </button>
-                  <input type="file" id={`fileInput-${doc.id}`} style={{ display: 'none' }} onChange={(e) => handleUpdateFile(e, doc.id)} />
-                  <button onClick={() => document.getElementById(`fileInput-${doc.id}`).click()} style={{ ...btnStyle, flex: 1, background: '#e0e7ff', color: '#4f46e5' }}>
-                    🔄 Đổi file
-                  </button>
-                </div>
-                
-                <button onClick={() => handleDelete(doc.id)} style={{ ...btnStyle, width: '100%', background: '#fee2e2', color: '#ef4444' }}>
-                  🗑️ Xóa tài liệu
-                </button>
+              {/* ACTIONS */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                <input type="file" id={`fileInput-${doc.id}`} style={{ display: 'none' }} onChange={e => handleUpdateFile(e, doc.id)} />
+                <button onClick={() => document.getElementById(`fileInput-${doc.id}`).click()}
+                  style={{ ...btnStyle, flex: 1, background: '#e0e7ff', color: '#4f46e5' }}>🔄 Đổi file</button>
+                <button onClick={() => handleDelete(doc.id)}
+                  style={{ ...btnStyle, flex: 1, background: '#fee2e2', color: '#ef4444' }}>🗑️ Xóa</button>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
