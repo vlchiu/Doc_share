@@ -1,17 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
 import Spinner from '../components/Spinner';
+import { SkeletonGrid } from '../components/SkeletonCard';
 import { openOrDownload, FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
 
 const API_URL = import.meta.env.VITE_API_URL;
+
+function useDebounce(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
 
 function Home() {
   const [documents, setDocuments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
@@ -21,34 +31,43 @@ function Home() {
   const isAuthenticated = !!localStorage.getItem('token');
 
   const location = useLocation();
-  const currentType = new URLSearchParams(location.search).get('type') || 'All';
+  const currentType = new URLSearchParams(location.search).get('type') || '';
 
+  const debouncedSearch = useDebounce(searchTerm, 400);
+
+  // Reset page khi filter thay đổi
+  useEffect(() => { setPage(1); }, [debouncedSearch, selectedCategory, currentType, sortBy]);
+
+  const fetchDocuments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page, limit: 12,
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(selectedCategory && { category: selectedCategory }),
+        ...(currentType && { docType: currentType }),
+        sortBy,
+      });
+      const res = await axiosClient.get(`/documents?${params}`);
+      setDocuments(res.data.documents);
+      setPagination(res.data.pagination);
+    } catch { toast.error('Lỗi khi tải dữ liệu!'); }
+    finally { setLoading(false); }
+  }, [page, debouncedSearch, selectedCategory, currentType, sortBy]);
+
+  useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+
+  // Load categories + user info 1 lần
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [docsRes, catsRes] = await Promise.all([
-          axiosClient.get(`/documents?page=${page}&limit=12`),
-          axiosClient.get('/categories'),
-        ]);
-        setDocuments(docsRes.data.documents);
-        setPagination(docsRes.data.pagination);
-        setCategories(catsRes.data);
-        if (isAuthenticated) {
-          const [userRes, savedRes] = await Promise.all([
-            axiosClient.get('/auth/me'),
-            axiosClient.get('/documents/saved'),
-          ]);
+    axiosClient.get('/categories').then(res => setCategories(res.data));
+    if (isAuthenticated) {
+      Promise.all([axiosClient.get('/auth/me'), axiosClient.get('/documents/saved')])
+        .then(([userRes, savedRes]) => {
           setCurrentUser(userRes.data);
           setSavedDocIds(savedRes.data.map(d => d.id));
-        }
-      } catch { toast.error('Lỗi khi tải dữ liệu!'); }
-      finally { setLoading(false); }
-    };
-    fetchData();
-  }, [isAuthenticated, page]);
-
-  useEffect(() => { setPage(1); }, [currentType, selectedCategory]);
+        }).catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   const handleDownload = async (doc) => {
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để tải xuống!'); return; }
@@ -70,9 +89,7 @@ function Home() {
   const handleView = async (doc) => {
     try {
       await axiosClient.post(`/documents/${doc.id}/view`);
-      const fileUrl = `${API_URL}${doc.file_url}`;
-      const fileName = doc.file_url.split('/').pop();
-      openOrDownload(fileUrl, doc.file_type, fileName, () => handleDownload(doc));
+      openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), () => handleDownload(doc));
       setDocuments(docs => docs.map(d => d.id === doc.id ? { ...d, view_count: d.view_count + 1 } : d));
     } catch {}
   };
@@ -94,34 +111,30 @@ function Home() {
     } catch { toast.error('Lỗi khi xóa!'); }
   };
 
-  const filtered = documents
-    .filter(doc => {
-      const matchSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCat = selectedCategory === 'All' || doc.category_id === selectedCategory;
-      const matchType = currentType === 'All' || doc.doc_type === currentType;
-      return matchSearch && matchCat && matchType;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'downloads') return b.download_count - a.download_count;
-      if (sortBy === 'views') return b.view_count - a.view_count;
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
-
   const btnStyle = { padding: '9px 0', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
 
   return (
     <div style={{ color: '#1a1a1a' }}>
       <h2 style={{ textAlign: 'center', fontSize: '26px', marginBottom: '8px' }}>
-        {currentType === 'All' ? '📚 Thư viện Tài liệu' : `📂 ${currentType}`}
+        {currentType ? `📂 ${currentType}` : '📚 Thư viện Tài liệu'}
       </h2>
+      <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', marginBottom: '18px' }}>
+        {pagination.total > 0 ? `${pagination.total} tài liệu` : ''}
+      </p>
 
       {/* SEARCH + SORT */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', margin: '18px 0 22px', flexWrap: 'wrap' }}>
-        <input
-          type="text" placeholder="🔍 Tìm kiếm tài liệu..."
-          value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-          style={{ width: '100%', maxWidth: '360px', padding: '11px 20px', borderRadius: '30px', border: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.06)', outline: 'none', fontSize: '14px' }}
-        />
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
+          <input
+            type="text" placeholder="🔍 Tìm kiếm tài liệu..."
+            value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            style={{ width: '100%', padding: '11px 40px 11px 20px', borderRadius: '30px', border: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.06)', outline: 'none', fontSize: '14px', boxSizing: 'border-box' }}
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')}
+              style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '16px' }}>✕</button>
+          )}
+        </div>
         <select value={sortBy} onChange={e => setSortBy(e.target.value)}
           style={{ padding: '11px 16px', borderRadius: '30px', border: '1px solid #e2e8f0', background: '#fff', fontSize: '14px', fontWeight: 'bold', color: '#555', cursor: 'pointer', outline: 'none' }}>
           <option value="newest">🕐 Mới nhất</option>
@@ -132,62 +145,55 @@ function Home() {
 
       {/* CATEGORY FILTER */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
-        <button onClick={() => setSelectedCategory('All')}
-          style={{ padding: '7px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', background: selectedCategory === 'All' ? '#10b981' : '#e2e8f0', color: selectedCategory === 'All' ? '#fff' : '#555' }}>
+        <button onClick={() => setSelectedCategory('')}
+          style={{ padding: '7px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', background: !selectedCategory ? '#10b981' : '#e2e8f0', color: !selectedCategory ? '#fff' : '#555' }}>
           🌟 Tất cả
         </button>
         {categories.map(cat => (
-          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-            style={{ padding: '7px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', background: selectedCategory === cat.id ? '#10b981' : '#e2e8f0', color: selectedCategory === cat.id ? '#fff' : '#555' }}>
+          <button key={cat.id} onClick={() => setSelectedCategory(String(cat.id))}
+            style={{ padding: '7px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', background: selectedCategory === String(cat.id) ? '#10b981' : '#e2e8f0', color: selectedCategory === String(cat.id) ? '#fff' : '#555' }}>
             {cat.name}
           </button>
         ))}
       </div>
 
-      {loading ? <Spinner /> : (
+      {loading ? <SkeletonGrid count={12} /> : (
         <>
-          {filtered.length === 0 ? (
+          {documents.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <div style={{ fontSize: '56px', marginBottom: '12px' }}>📭</div>
               <p style={{ fontSize: '17px', color: '#64748b', fontWeight: '500' }}>Không tìm thấy tài liệu nào.</p>
-              {searchTerm && <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '6px' }}>Thử tìm với từ khóa khác.</p>}
+              {debouncedSearch && <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '6px' }}>Thử tìm với từ khóa khác.</p>}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-              {filtered.map(doc => {
+              {documents.map(doc => {
                 const isSaved = savedDocIds.includes(doc.id);
                 const fileIcon = FILE_ICONS[doc.file_type] || '📎';
                 const fileLabel = getFileLabel(doc.file_type, doc.file_url);
                 return (
                   <div key={doc.id} style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-
-                    {/* HEADER: icon + title + description */}
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                       <span style={{ fontSize: '30px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           <Link to={`/documents/${doc.id}`} style={{ textDecoration: 'none', color: '#1a1a1a', flex: 1, minWidth: 0 }}>
-                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', lineHeight: 1.4,
-                              overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                               {doc.title}
                             </h3>
                           </Link>
-                          <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold',
-                            background: (FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9' }).bg,
-                            color: (FILE_BADGE_COLORS[fileLabel] || { color: '#475569' }).color }}>
+                          <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: (FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9' }).bg, color: (FILE_BADGE_COLORS[fileLabel] || { color: '#475569' }).color }}>
                             {fileLabel}
                           </span>
                         </div>
                         {doc.description && (
-                          <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.4,
-                            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                          <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                             {doc.description}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    {/* META */}
                     <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '9px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span>👤 <b style={{ color: '#334155' }}>{doc.user?.name}</b> · 🏷️ {doc.doc_type}</span>
                       <div style={{ display: 'flex', gap: '10px', fontWeight: 'bold' }}>
@@ -196,31 +202,20 @@ function Home() {
                       </div>
                     </div>
 
-                    {/* ACTIONS */}
                     <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                      <button onClick={() => handleView(doc)}
-                        style={{ ...btnStyle, flex: 1, background: '#f1f5f9', color: '#334155' }}>👀 Xem</button>
-                      <button onClick={() => handleDownload(doc)}
-                        style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff' }}>⬇️ Tải</button>
-                      <Link to={`/documents/${doc.id}`}
-                        style={{ ...btnStyle, flex: 1, background: '#f0fdf4', color: '#16a34a', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        🔍 Chi tiết
-                      </Link>
+                      <button onClick={() => handleView(doc)} style={{ ...btnStyle, flex: 1, background: '#f1f5f9', color: '#334155' }}>👀 Xem</button>
+                      <button onClick={() => handleDownload(doc)} style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff' }}>⬇️ Tải</button>
+                      <Link to={`/documents/${doc.id}`} style={{ ...btnStyle, flex: 1, background: '#f0fdf4', color: '#16a34a', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍 Chi tiết</Link>
                     </div>
 
-                    {/* SAVE + ADMIN DELETE */}
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {isAuthenticated && (
-                        <button onClick={() => handleToggleSave(doc.id)}
-                          style={{ ...btnStyle, flex: 1, background: isSaved ? '#fee2e2' : '#fef3c7', color: isSaved ? '#b91c1c' : '#d97706' }}>
+                        <button onClick={() => handleToggleSave(doc.id)} style={{ ...btnStyle, flex: 1, background: isSaved ? '#fee2e2' : '#fef3c7', color: isSaved ? '#b91c1c' : '#d97706' }}>
                           {isSaved ? '❌ Bỏ lưu' : '🔖 Lưu'}
                         </button>
                       )}
                       {currentUser?.role === 'ADMIN' && (
-                        <button onClick={() => handleDeleteAdmin(doc.id)}
-                          style={{ ...btnStyle, flex: isAuthenticated ? 'none' : 1, padding: '9px 14px', background: '#fee2e2', color: '#b91c1c' }}>
-                          🗑️
-                        </button>
+                        <button onClick={() => handleDeleteAdmin(doc.id)} style={{ ...btnStyle, flex: isAuthenticated ? 'none' : 1, padding: '9px 14px', background: '#fee2e2', color: '#b91c1c' }}>🗑️</button>
                       )}
                     </div>
                   </div>
@@ -231,21 +226,15 @@ function Home() {
 
           {/* PAGINATION */}
           {pagination.totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '40px', flexWrap: 'wrap' }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: page === 1 ? '#f1f5f9' : '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer', color: '#555', fontWeight: 'bold' }}>
-                ← Trước
-              </button>
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: page === 1 ? '#f1f5f9' : '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer', color: '#555', fontWeight: 'bold' }}>← Trước</button>
               {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
                 <button key={p} onClick={() => setPage(p)}
-                  style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: p === page ? '#3b82f6' : '#e2e8f0', color: p === page ? '#fff' : '#555', fontWeight: 'bold', cursor: 'pointer' }}>
-                  {p}
-                </button>
+                  style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: p === page ? '#3b82f6' : '#e2e8f0', color: p === page ? '#fff' : '#555', fontWeight: 'bold', cursor: 'pointer' }}>{p}</button>
               ))}
               <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page === pagination.totalPages}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: page === pagination.totalPages ? '#f1f5f9' : '#fff', cursor: page === pagination.totalPages ? 'not-allowed' : 'pointer', color: '#555', fontWeight: 'bold' }}>
-                Sau →
-              </button>
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: page === pagination.totalPages ? '#f1f5f9' : '#fff', cursor: page === pagination.totalPages ? 'not-allowed' : 'pointer', color: '#555', fontWeight: 'bold' }}>Sau →</button>
             </div>
           )}
         </>

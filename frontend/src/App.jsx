@@ -11,8 +11,10 @@ import AdminDashboard from './pages/AdminDashboard';
 import SavedDocuments from './pages/SavedDocuments';
 import NotFound from './pages/NotFound';
 import DocumentDetail from './pages/DocumentDetail';
+import Trash from './pages/Trash';
 import axiosClient from './api/axiosClient';
 import ProtectedRoute from './components/ProtectedRoute';
+import NotificationBell from './components/NotificationBell';
 
 // component để theo dõi URL và đóng menu khi chuyển trang
 function LinkWithCloseMenu({ to, onClick, style, children }) {
@@ -67,12 +69,15 @@ function App() {
           <div>
             {isAuthenticated && user ? (
               <div style={{ position: 'relative' }} id="user-menu">
-                <div onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '5px 10px', borderRadius: '30px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#cbd5e1', color: '#fff', fontWeight: 'bold', fontSize: '16px' }}>
-                    {user.avatar_url ? <img src={`${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.name.charAt(0).toUpperCase()}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <NotificationBell />
+                  <div onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '5px 10px', borderRadius: '30px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#cbd5e1', color: '#fff', fontWeight: 'bold', fontSize: '16px' }}>
+                      {user.avatar_url ? <img src={`${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span style={{ fontWeight: 'bold', color: '#1a1a1a' }}>{user.name}</span>
+                    <span style={{ fontSize: '12px', color: '#888' }}>▼</span>
                   </div>
-                  <span style={{ fontWeight: 'bold', color: '#1a1a1a' }}>{user.name}</span>
-                  <span style={{ fontSize: '12px', color: '#888' }}>▼</span>
                 </div>
 
                 {showMenu && (
@@ -82,6 +87,7 @@ function App() {
                       <LinkWithCloseMenu to="/profile" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>⚙️ Thông tin tài khoản</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/my-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📁 Tài liệu của tôi</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/saved-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>🔖 Tài liệu đã lưu</LinkWithCloseMenu>
+                      <LinkWithCloseMenu to="/trash" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#64748b', fontWeight: '500' }}>🗑️ Thùng rác</LinkWithCloseMenu>
                       {user.role === 'ADMIN' && (
                         <LinkWithCloseMenu to="/admin" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#b91c1c', fontWeight: 'bold', background: '#fee2e2' }}>🛡️ Trang Quản Trị</LinkWithCloseMenu>
                       )}
@@ -129,6 +135,7 @@ function App() {
             <Route path="/my-documents" element={<ProtectedRoute user={user}><MyDocuments /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute user={user} adminOnly><AdminDashboard /></ProtectedRoute>} />
             <Route path="/saved-documents" element={<ProtectedRoute user={user}><SavedDocuments /></ProtectedRoute>} />
+            <Route path="/trash" element={<ProtectedRoute user={user}><Trash /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>

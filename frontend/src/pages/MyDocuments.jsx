@@ -37,11 +37,11 @@ function MyDocuments() {
   };
 
   const handleDelete = async (docId) => {
-    if (!window.confirm('⚠️ Bạn có chắc chắn muốn xóa tài liệu này?')) return;
+    if (!window.confirm('⚠️ Chuyển tài liệu vào thùng rác?')) return;
     try {
       await axiosClient.delete(`/documents/${docId}`);
       setMyDocs(myDocs.filter(doc => doc.id !== docId));
-      toast.success('Đã xóa tài liệu!');
+      toast.success('Đã chuyển vào thùng rác!');
     } catch { toast.error('Lỗi khi xóa!'); }
   };
 
@@ -97,10 +97,15 @@ function MyDocuments() {
 
               {/* BADGE TRẠNG THÁI */}
               <span style={{ alignSelf: 'flex-start', padding: '3px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
-                background: doc.status === 'APPROVED' ? '#dcfce7' : '#fef9c3',
-                color: doc.status === 'APPROVED' ? '#16a34a' : '#ca8a04' }}>
-                {doc.status === 'APPROVED' ? '✅ Đã duyệt' : '⏳ Chờ duyệt'}
+                background: doc.status === 'APPROVED' ? '#dcfce7' : doc.status === 'REJECTED' ? '#fee2e2' : '#fef9c3',
+                color: doc.status === 'APPROVED' ? '#16a34a' : doc.status === 'REJECTED' ? '#b91c1c' : '#ca8a04' }}>
+                {doc.status === 'APPROVED' ? '✅ Đã duyệt' : doc.status === 'REJECTED' ? '❌ Bị từ chối' : '⏳ Chờ duyệt'}
               </span>
+              {doc.status === 'REJECTED' && doc.reject_reason && (
+                <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', color: '#b91c1c' }}>
+                  💬 Lý do: {doc.reject_reason}
+                </div>
+              )}
 
               {/* META */}
               <div style={{ fontSize: '13px', color: '#475569', background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}>
@@ -117,7 +122,7 @@ function MyDocuments() {
                 <button onClick={() => document.getElementById(`fileInput-${doc.id}`).click()}
                   style={{ ...btnStyle, flex: 1, background: '#e0e7ff', color: '#4f46e5' }}>🔄 Đổi file</button>
                 <button onClick={() => handleDelete(doc.id)}
-                  style={{ ...btnStyle, flex: 1, background: '#fee2e2', color: '#ef4444' }}>🗑️ Xóa</button>
+                  style={{ ...btnStyle, flex: 1, background: '#fee2e2', color: '#ef4444' }}>🗑️ Thùng rác</button>
               </div>
             </div>
           ))}

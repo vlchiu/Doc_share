@@ -8,23 +8,27 @@ function AdminDashboard() {
   const [pendingDocs, setPendingDocs] = useState([]);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [editingCat, setEditingCat] = useState(null);
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [pendingRes, usersRes, statsRes] = await Promise.all([
+      const [pendingRes, usersRes, statsRes, catsRes] = await Promise.all([
         axiosClient.get('/documents/pending'),
         axiosClient.get('/admin/users'),
         axiosClient.get('/admin/stats'),
+        axiosClient.get('/categories'),
       ]);
       setPendingDocs(pendingRes.data);
       setUsers(usersRes.data.users);
       setStats(statsRes.data);
+      setCategories(catsRes.data);
     } catch (error) { console.error("Lỗi", error); }
     finally { setLoading(false); }
   };
@@ -36,6 +40,17 @@ function AdminDashboard() {
       setStats(s => ({ ...s, pendingDocs: s.pendingDocs - 1, totalDocs: s.totalDocs + 1 }));
       toast.success('Đã duyệt tài liệu!');
     } catch { toast.error('Lỗi khi duyệt!'); }
+  };
+
+  const handleReject = async (docId) => {
+    const reason = prompt('Nhập lý do từ chối:');
+    if (!reason?.trim()) return;
+    try {
+      await axiosClient.put(`/documents/${docId}/reject`, { reason });
+      setPendingDocs(pendingDocs.filter(doc => doc.id !== docId));
+      setStats(s => ({ ...s, pendingDocs: s.pendingDocs - 1 }));
+      toast.success('Đã từ chối tài liệu!');
+    } catch { toast.error('Lỗi!'); }
   };
 
   const handleDeleteDoc = async (docId) => {
@@ -65,6 +80,36 @@ function AdminDashboard() {
     } catch { toast.error('Lỗi!'); }
   };
 
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    try {
+      const res = await axiosClient.post('/categories', { name: newCatName, description: newCatDesc });
+      setCategories([...categories, res.data]);
+      setNewCatName(''); setNewCatDesc('');
+      toast.success('Đã thêm danh mục!');
+    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+  };
+
+  const handleUpdateCategory = async (id) => {
+    if (!editingCat?.name?.trim()) return;
+    try {
+      const res = await axiosClient.put(`/categories/${id}`, { name: editingCat.name, description: editingCat.description });
+      setCategories(categories.map(c => c.id === id ? res.data : c));
+      setEditingCat(null);
+      toast.success('Đã cập nhật!');
+    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm('Xóa danh mục này?')) return;
+    try {
+      await axiosClient.delete(`/categories/${id}`);
+      setCategories(categories.filter(c => c.id !== id));
+      toast.success('Đã xóa danh mục!');
+    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+  };
+
   const thStyle = { padding: '12px 15px', textAlign: 'left', fontWeight: 'bold', color: '#64748b', fontSize: '12px', textTransform: 'uppercase' };
   const tdStyle = { padding: '12px 15px', borderBottom: '1px solid #f1f5f9', fontSize: '14px' };
   const tabStyle = (active) => ({ padding: '10px 20px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', background: active ? '#3b82f6' : '#e2e8f0', color: active ? '#fff' : '#555' });
@@ -92,9 +137,10 @@ function AdminDashboard() {
       )}
 
       {/* TABS */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <button style={tabStyle(tab === 'pending')} onClick={() => setTab('pending')}>⏳ Chờ duyệt ({pendingDocs.length})</button>
         <button style={tabStyle(tab === 'users')} onClick={() => setTab('users')}>👥 Quản lý User ({users.length})</button>
+        <button style={tabStyle(tab === 'categories')} onClick={() => setTab('categories')}>📁 Danh mục ({categories.length})</button>
         {stats?.topDocs?.length > 0 && (
           <button style={tabStyle(tab === 'top')} onClick={() => setTab('top')}>🏆 Top tài liệu</button>
         )}
@@ -128,6 +174,7 @@ function AdminDashboard() {
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                             <button onClick={() => handleApprove(doc.id)} style={{ padding: '7px 14px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✅ Duyệt</button>
+                            <button onClick={() => handleReject(doc.id)} style={{ padding: '7px 14px', background: '#fef9c3', color: '#a16207', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>❌ Từ chối</button>
                             <button onClick={() => handleDeleteDoc(doc.id)} style={{ padding: '7px 14px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🗑️ Xóa</button>
                           </div>
                         </td>
@@ -181,6 +228,65 @@ function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+            )}
+
+            {/* TAB: DANH MỤC */}
+            {tab === 'categories' && (
+              <div>
+                {/* FORM THÊM MỚI */}
+                <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                  <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Tên danh mục..." required
+                    style={{ flex: 2, minWidth: '160px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }} />
+                  <input value={newCatDesc} onChange={e => setNewCatDesc(e.target.value)} placeholder="Mô tả (không bắt buộc)..."
+                    style={{ flex: 3, minWidth: '200px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }} />
+                  <button type="submit" style={{ padding: '10px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>+ Thêm</button>
+                </form>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={thStyle}>Tên danh mục</th>
+                      <th style={thStyle}>Mô tả</th>
+                      <th style={thStyle}>Số tài liệu</th>
+                      <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categories.map(cat => (
+                      <tr key={cat.id}>
+                        <td style={tdStyle}>
+                          {editingCat?.id === cat.id ? (
+                            <input value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
+                              style={{ padding: '6px 10px', borderRadius: '6px', border: '2px solid #3b82f6', outline: 'none', fontSize: '14px', width: '100%' }} />
+                          ) : <b>{cat.name}</b>}
+                        </td>
+                        <td style={{ ...tdStyle, color: '#64748b' }}>
+                          {editingCat?.id === cat.id ? (
+                            <input value={editingCat.description || ''} onChange={e => setEditingCat({ ...editingCat, description: e.target.value })}
+                              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px', width: '100%' }} />
+                          ) : cat.description || '—'}
+                        </td>
+                        <td style={{ ...tdStyle, color: '#64748b' }}>{cat._count?.documents || 0}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                            {editingCat?.id === cat.id ? (
+                              <>
+                                <button onClick={() => handleUpdateCategory(cat.id)} style={{ padding: '6px 12px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✓ Lưu</button>
+                                <button onClick={() => setEditingCat(null)} style={{ padding: '6px 12px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✕</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => setEditingCat({ id: cat.id, name: cat.name, description: cat.description || '' })} style={{ padding: '6px 12px', background: '#fef3c7', color: '#d97706', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✏️ Sửa</button>
+                                <button onClick={() => handleDeleteCategory(cat.id)} style={{ padding: '6px 12px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🗑️ Xóa</button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* TAB: TOP TÀI LIỆU */}

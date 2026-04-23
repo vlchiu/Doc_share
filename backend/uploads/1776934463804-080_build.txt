@@ -1,0 +1,111 @@
+
+https://docs.qualcomm.com/doc/RNO-250918035646/topic/ReleaseNote.html
+
+1, NON-HLOS:
+git clone ssh://haonc@192.168.1.55:29418/AIBOX_QCS6490/non-hlos -b 080_la5.0_r00060.1
+
+a, MODEM:
+git clone "ssh://haonc@192.168.1.55:29418/QCM6490_LA5.0_MODEM" -b 080_la5.0_r00060.1
+
+chạy docker 
+cd Docker
+docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) -t hsptek:v1 - < Dockerfile-20.04
+docker run -it --name kimq_build --privileged -v /media/hsptek/data/hoangnv/080:/home/hsptek/source/hoangnv/080 hsptek:v1
+
+docker start -ai kimq_build
+
+export SECTOOLS_DIR=/home/hsptek/source/hoppq/080/non-hlos/common/sectools
+export SECTOOLS=/home/hsptek/source/hoppq/080/non-hlos/common/sectools
+export HEXAGON_ROOT=/home/hsptek/source/hoppq/080/
+export PYTHONPATH=$PYTHONPATH:/home/hsptek/source/hoppq/080/non-hlos/common/sectools
+
+clean: 
+	python build_variant.py kodiak.geniot.prod --clean
+
+build 
+	python build_variant.py kodiak.geniot.prod bparams=-k
+
+
+
+b, BOOT
+build:
+	python boot_images/boot_tools/buildex.py -t kodiak,QcomToolsPkg -v LAA -r RELEASE
+clean: 
+	python boot_images/boot_tools/buildex.py -t kodiak,QcomToolsPkg -v LAA -r RELEASE -b cleanall
+
+
+c,
+
+export SECTOOLS=/home/hsptek/source/hoppq/080/non-hlos/common/sectoolsv2/ext/Linux/sectools
+export HEXAGON_ROOT=/home/hsptek/source/hoppq/080/
+
+
+QSIS:
+
+mkdir qssi
+cd qssi
+repo init -u ssh://haonc@192.168.1.55:29418/AIBOX_QCS6490_ANDROID/manifest -b 080_la5.0_r00060.1_qssi
+repo sync -c -j16
+
+cd qssi
+source build/envsetup.sh
+lunch qssi-userdebug
+bash build.sh dist --qssi_only EXPERIMENTAL_USE_OPENJDK9=1.8 -j48
+
+VENDOR:
+
+cd vendor
+repo init -u ssh://haonc@192.168.1.55:29418/AIBOX_QCS6490_ANDROID/manifest -b 080_la5.0_r00060.1_vendor
+repo sync -c -j16
+
+cp -r vendor/hsptek/* .
+
+source build/envsetup.sh 
+lunch lahaina-userdebug
+bash build.sh dist --target_only EXPERIMENTAL_USE_OPENJDK9=1.8 -j112
+
+MERGE:
+python vendor/qcom/opensource/core-utils/build/build_image_standalone.py --image super \
+--qssi_build_path /media/hsptek/os/080/qssi --target_build_path /media/hsptek/os/080/vendor  \
+--merged_build_path /media/hsptek/os/080/vendor --target_lunch lahaina 
+
+
+3. FLASH
+
+fastboot flash abl_a abl.elf
+fastboot flash abl_b abl.elf
+fastboot flash boot_a boot.img
+fastboot flash boot_b boot.img
+fastboot flash dtbo_a dtbo.img
+fastboot flash dtbo_b dtbo.img
+fastboot flash vendor_boot_a vendor_boot.img
+fastboot flash vendor_boot_b vendor_boot.img
+fastboot flash vbmeta_a vbmeta.img
+fastboot flash vbmeta_b vbmeta.img
+fastboot flash vbmeta_system_a vbmeta_system.img
+fastboot flash vbmeta_system_b vbmeta_system.img
+fastboot flash qweslicstore_a qweslicstore.bin
+fastboot flash qweslicstore_b qweslicstore.bin
+fastboot flash persist persist.img
+fastboot flash super super.img
+fastboot erase userdata
+fastboot erase metadata
+fastboot reboot
+
+
+Ngoài ra có 1 lưu ý nữa là sau khi đồng bộ copy source từ bên vendor/hsptek sang source chính thì ae cần thay đổi các file có đuôi .mk, .bp, .bb, thành đuôi _mk, _bp, _bb, để tránh lúc build hệ thống nó load cả 2 nơi dẫn đến lỗi conflict.
+
+cd vendor/hsptek 
+
+for x in $(find . -name \*.mk); do
+mv $x $(echo "$x" | sed 's/\.mk$/_mk/')
+done
+
+for x in $(find . -name \*.bp); do
+mv $x $(echo "$x" | sed 's/\.bp$/_bp/')
+done
+
+for x in $(find . -name \*.bb); do
+mv $x $(echo "$x" | sed 's/\.bb$/_bb/')
+done
+
