@@ -16,6 +16,9 @@ const uploadDocument = async (req, res) => {
     if (!category_id) return res.status(400).json({ message: "Vui lòng chọn danh mục" });
     if (!file) return res.status(400).json({ message: "Vui lòng chọn file" });
 
+    const VALID_DOC_TYPES = ['Chung', 'Hardware', 'Software', 'Thông báo'];
+    const validDocType = VALID_DOC_TYPES.includes(doc_type) ? doc_type : 'Chung';
+
     const newDoc = await prisma.document.create({
       data: {
         title: title.trim(),
@@ -24,13 +27,37 @@ const uploadDocument = async (req, res) => {
         file_type: file.mimetype,
         category_id: parseInt(category_id),
         user_id: userId,
-        doc_type: doc_type || "Chung"
+        doc_type: validDocType
       }
     });
 
     res.status(201).json({ message: "Tải lên thành công chờ duyệt!", document: newDoc });
+
+    // Thông báo cho những người đang follow user này
+    prisma.follow.findMany({
+      where: { following_id: userId },
+      select: { follower_id: true }
+    }).then(followers => {
+      if (followers.length === 0) return;
+      const user = prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+      return user.then(u => {
+        return Promise.all(followers.map(f =>
+          prisma.notification.create({
+            data: {
+              user_id: f.follower_id,
+              content: `📄 ${u.name} vừa đăng tài liệu mới: "${newDoc.title}"`,
+              link: `/documents/${newDoc.id}`
+            }
+          })
+        ));
+      });
+    }).catch(() => {});
   } catch (error) {
-    // Xử lý lỗi từ multer (file quá lớn, sai loại)
+    // Xóa file đã upload nếu tạo document thất bại
+    if (req.file) {
+      const filePath = path.join(__dirname, '..', 'uploads', req.file.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: "File quá lớn! Giới hạn tối đa là 20MB." });
     }
@@ -43,6 +70,7 @@ const getDocumentById = async (req, res) => {
   try {
     const { id } = req.params;
     const docId = parseInt(id);
+    if (isNaN(docId) || docId < 1) return res.status(400).json({ message: "ID không hợp lệ" });
 
     // Lấy userId từ token nếu có (optional auth)
     const authHeader = req.header('Authorization');
@@ -55,7 +83,7 @@ const getDocumentById = async (req, res) => {
       } catch {}
     }
 
-    const [doc, savedRecord] = await Promise.all([
+    const [doc, savedRecord, ratingAgg, userRating] = await Promise.all([
       prisma.document.findUnique({
         where: { id: docId },
         include: {
@@ -69,12 +97,52 @@ const getDocumentById = async (req, res) => {
       }),
       userId ? prisma.savedDocument.findUnique({
         where: { user_id_document_id: { user_id: userId, document_id: docId } }
+      }) : Promise.resolve(null),
+      prisma.rating.aggregate({
+        where: { document_id: docId },
+        _avg: { score: true },
+        _count: { score: true }
+      }),
+      userId ? prisma.rating.findUnique({
+        where: { user_id_document_id: { user_id: userId, document_id: docId } }
       }) : Promise.resolve(null)
     ]);
 
     if (!doc) return res.status(404).json({ message: "Không tìm thấy tài liệu" });
+    if (doc.deleted_at) return res.status(404).json({ message: "Tài liệu không tồn tại" });
+    // Chỉ chủ tài liệu hoặc admin mới xem được tài liệu chưa duyệt
+    if (doc.status !== 'APPROVED') {
+      if (!userId) return res.status(403).json({ message: "Tài liệu chưa được duyệt" });
+      const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+      if (doc.user_id !== userId && currentUser?.role !== 'ADMIN') {
+        return res.status(403).json({ message: "Tài liệu chưa được duyệt" });
+      }
+    }
 
-    res.json({ ...doc, isSaved: !!savedRecord });
+    // Lấy tất cả thông báo từ admin (báo cáo đã xử lý) — chỉ trả về cho chủ tài liệu hoặc admin
+    let adminNotices = [];
+    if (userId) {
+      const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+      const isOwner = doc.user_id === userId;
+      const isAdmin = currentUser?.role === 'ADMIN';
+
+      if (isOwner || isAdmin) {
+        adminNotices = await prisma.report.findMany({
+          where: { document_id: docId, status: 'RESOLVED', action: { in: ['WARN', 'REMOVE'] } },
+          orderBy: { created_at: 'asc' }, // cũ nhất lên trên
+          select: { id: true, action: true, admin_note: true, created_at: true }
+        });
+      }
+    }
+
+    res.json({
+      ...doc,
+      isSaved: !!savedRecord,
+      avgScore: ratingAgg._avg.score,
+      totalRatings: ratingAgg._count.score,
+      userScore: userRating?.score || null,
+      adminNotices,
+    });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server" });
   }
@@ -83,13 +151,31 @@ const getDocumentById = async (req, res) => {
 // [GET] Lấy tất cả tài liệu (Chỉ lấy tài liệu ĐÃ DUYỆT) - có pagination + search
 const getAllDocuments = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 12;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 12));
     const skip = (page - 1) * limit;
     const search = req.query.search?.trim() || '';
     const category = req.query.category || '';
     const docType = req.query.docType || '';
     const sortBy = req.query.sortBy || 'newest';
+    const fileType = req.query.fileType || '';
+    const dateFrom = req.query.dateFrom || '';
+    const dateTo = req.query.dateTo || '';
+
+    const FILE_TYPE_MAP = {
+      'pdf': ['application/pdf'],
+      'word': ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      'excel': ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+      'powerpoint': ['application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+      'image': ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+      'zip': ['application/zip', 'application/x-rar-compressed'],
+    };
+
+    const fileTypeFilter = fileType
+      ? FILE_TYPE_MAP[fileType]
+        ? { file_type: { in: FILE_TYPE_MAP[fileType] } }
+        : { file_type: { contains: fileType, mode: 'insensitive' } }
+      : {};
 
     const where = {
       status: 'APPROVED',
@@ -98,10 +184,18 @@ const getAllDocuments = async (req, res) => {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
+          { user: { name: { contains: search, mode: 'insensitive' } } },
         ]
       }),
       ...(category && { category_id: parseInt(category) }),
       ...(docType && { doc_type: docType }),
+      ...fileTypeFilter,
+      ...(dateFrom || dateTo ? {
+        created_at: {
+          ...(dateFrom && { gte: new Date(dateFrom) }),
+          ...(dateTo && { lte: new Date(dateTo + 'T23:59:59') }),
+        }
+      } : {}),
     };
 
     const orderBy =
@@ -243,6 +337,9 @@ const permanentDeleteDocument = async (req, res) => {
 
     await prisma.comment.deleteMany({ where: { document_id: parseInt(id) } });
     await prisma.savedDocument.deleteMany({ where: { document_id: parseInt(id) } });
+    await prisma.downloadHistory.deleteMany({ where: { document_id: parseInt(id) } });
+    await prisma.rating.deleteMany({ where: { document_id: parseInt(id) } });
+    await prisma.report.deleteMany({ where: { document_id: parseInt(id) } });
     await prisma.document.delete({ where: { id: parseInt(id) } });
 
     res.json({ message: "Đã xóa vĩnh viễn!" });
@@ -272,14 +369,24 @@ const getTrashDocuments = async (req, res) => {
   }
 };
 
-// [POST] Tăng lượt tải xuống
+// [POST] Tăng lượt tải xuống + lưu lịch sử
 const incrementDownload = async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedDoc = await prisma.document.update({
-      where: { id: parseInt(id) },
-      data: { download_count: { increment: 1 } }, // Tự động cộng 1 vào DB
-    });
+    const userId = req.user.userId;
+    const docId = parseInt(id);
+
+    const doc = await prisma.document.findUnique({ where: { id: docId }, select: { id: true } });
+    if (!doc) return res.status(404).json({ message: "Không tìm thấy tài liệu" });
+
+    const [updatedDoc] = await Promise.all([
+      prisma.document.update({
+        where: { id: docId },
+        data: { download_count: { increment: 1 } },
+      }),
+      prisma.downloadHistory.create({ data: { user_id: userId, document_id: docId } })
+    ]);
+
     res.json({ message: "Đã tăng lượt tải", download_count: updatedDoc.download_count });
   } catch (error) {
     res.status(500).json({ message: "Lỗi hệ thống" });
@@ -326,6 +433,10 @@ const addComment = async (req, res) => {
 
     if (!content || !content.trim()) return res.status(400).json({ message: "Nội dung bình luận không được để trống" });
     if (content.trim().length > 500) return res.status(400).json({ message: "Bình luận không được quá 500 ký tự" });
+
+    // Kiểm tra tài liệu tồn tại và chưa bị xóa
+    const docCheck = await prisma.document.findUnique({ where: { id: parseInt(id) }, select: { id: true, deleted_at: true } });
+    if (!docCheck || docCheck.deleted_at) return res.status(404).json({ message: "Tài liệu không tồn tại" });
 
     const newComment = await prisma.comment.create({
       data: {
@@ -464,15 +575,116 @@ const getSavedDocuments = async (req, res) => {
       where: { user_id: userId },
       include: {
         document: {
-          include: { category: true, user: { select: { name: true } } }
+          include: { category: true, user: { select: { id: true, name: true } } }
         }
       },
       orderBy: { saved_at: 'desc' }
     });
-    // Trích xuất mảng document từ kết quả của bảng trung gian
-    res.json(savedDocs.map(item => item.document));
+    res.json(savedDocs.map(item => item.document).filter(doc => doc && !doc.deleted_at));
   } catch (error) {
     res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+// [POST] Đánh giá tài liệu (1-5 sao)
+const rateDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { score } = req.body;
+    const userId = req.user.userId;
+
+    if (!score || score < 1 || score > 5) return res.status(400).json({ message: "Điểm đánh giá phải từ 1 đến 5" });
+
+    await prisma.rating.upsert({
+      where: { user_id_document_id: { user_id: userId, document_id: parseInt(id) } },
+      update: { score: parseInt(score) },
+      create: { user_id: userId, document_id: parseInt(id), score: parseInt(score) }
+    });
+
+    // Tính lại điểm trung bình
+    const agg = await prisma.rating.aggregate({
+      where: { document_id: parseInt(id) },
+      _avg: { score: true },
+      _count: { score: true }
+    });
+
+    res.json({ avgScore: agg._avg.score, totalRatings: agg._count.score, userScore: parseInt(score) });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// [GET] Lịch sử tải xuống của user
+const getDownloadHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = 20;
+    const skip = (page - 1) * limit;
+
+    const [history, total] = await Promise.all([
+      prisma.downloadHistory.findMany({
+        where: { user_id: userId },
+        include: {
+          document: {
+            include: { category: { select: { name: true } } },
+          }
+        },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.downloadHistory.count({ where: { user_id: userId } })
+    ]);
+
+    res.json({ history, pagination: { total, page, totalPages: Math.ceil(total / limit) } });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// [DELETE] Xóa 1 mục lịch sử tải xuống
+const deleteDownloadHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { historyId } = req.params;
+    const item = await prisma.downloadHistory.findUnique({ where: { id: parseInt(historyId) } });
+    if (!item) return res.status(404).json({ message: "Không tìm thấy" });
+    if (item.user_id !== userId) return res.status(403).json({ message: "Không có quyền" });
+    await prisma.downloadHistory.delete({ where: { id: parseInt(historyId) } });
+    res.json({ message: "Đã xóa" });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// [DELETE] Xóa toàn bộ lịch sử tải xuống
+const clearDownloadHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    await prisma.downloadHistory.deleteMany({ where: { user_id: userId } });
+    res.json({ message: "Đã xóa toàn bộ lịch sử" });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// [GET] Lấy tài liệu công khai của 1 user theo userId
+const getUserDocuments = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [user, documents] = await Promise.all([
+      prisma.user.findUnique({ where: { id: parseInt(userId) }, select: { id: true, name: true, avatar_url: true, created_at: true } }),
+      prisma.document.findMany({
+        where: { user_id: parseInt(userId), status: 'APPROVED', deleted_at: null },
+        include: { category: true },
+        orderBy: { created_at: 'desc' }
+      })
+    ]);
+    if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    res.json({ user, documents });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -513,9 +725,11 @@ const deleteComment = async (req, res) => {
 };
 
 module.exports = { 
-  uploadDocument, getAllDocuments, getDocumentById, getMyDocuments, updateDocument,
+  uploadDocument, getAllDocuments, getDocumentById, getMyDocuments, getUserDocuments, updateDocument,
   deleteDocument, restoreDocument, permanentDeleteDocument, getTrashDocuments,
-  incrementDownload, incrementView, getComments, addComment, deleteComment,
+  incrementDownload, incrementView, getDownloadHistory, deleteDownloadHistory, clearDownloadHistory,
+  getComments, addComment, deleteComment,
   getPendingDocuments, approveDocument, rejectDocument,
-  toggleSaveDocument, getSavedDocuments
+  toggleSaveDocument, getSavedDocuments,
+  rateDocument
 };

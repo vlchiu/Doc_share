@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
+import { openOrDownload, FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -22,7 +24,7 @@ function SavedDocuments() {
   const handleView = async (doc) => {
     try {
       await axiosClient.post(`/documents/${doc.id}/view`);
-      window.open(`${API_URL}${doc.file_url}`, '_blank');
+      openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), () => handleDownload(doc));
     } catch {}
   };
 
@@ -53,34 +55,47 @@ function SavedDocuments() {
             <p style={{ fontSize: '17px', color: '#64748b', fontWeight: '500' }}>Chưa có tài liệu nào được lưu.</p>
           </div>
         ) : (
-          savedDocs.map((doc) => (
-            <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
-              <h3 style={{ margin: '0 0 15px 0', color: '#0f172a', fontSize: '18px', lineHeight: '1.4' }}>{doc.title}</h3>
-              
-              <div style={{ fontSize: '13px', color: '#475569', background: '#f8fafc', padding: '12px 15px', borderRadius: '12px', marginBottom: '20px' }}>
-                <p style={{ margin: '0 0 8px 0' }}>👤 Đăng bởi: <b style={{ color: '#0f172a' }}>{doc.user?.name}</b></p>
-                <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #e2e8f0', paddingTop: '8px', fontWeight: 'bold' }}>
-                  <span style={{ color: '#64748b' }}>👁️ Xem: {doc.view_count || 0}</span>
-                  <span style={{ color: '#3b82f6' }}>⬇️ Tải: {doc.download_count || 0}</span>
+          savedDocs.map((doc) => {
+            const fileIcon = FILE_ICONS[doc.file_type] || '📎';
+            const fileLabel = getFileLabel(doc.file_type, doc.file_url);
+            const bc = FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9', color: '#475569' };
+            return (
+            <div key={doc.id} style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+              {/* HEADER */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '28px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                    <Link to={`/documents/${doc.id}`} style={{ textDecoration: 'none', color: '#0f172a', flex: 1, minWidth: 0 }}>
+                      <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{doc.title}</h3>
+                    </Link>
+                    <span style={{ flexShrink: 0, padding: '2px 7px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', background: bc.bg, color: bc.color }}>{fileLabel}</span>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => handleView(doc)} style={{ ...btnStyle, flex: 1, background: '#e2e8f0', color: '#334155' }}>
-                    👀 Xem
-                  </button>
-                  <button onClick={() => handleDownload(doc)} style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff', boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' }}>
-                    ⬇️ Tải xuống
-                  </button>
+              {/* META */}
+              <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '9px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>👤 <b style={{ color: '#334155' }}>{doc.user?.name}</b> · 📁 {doc.category?.name}</span>
+                <div style={{ display: 'flex', gap: '10px', fontWeight: 'bold' }}>
+                  <span>👁️ {doc.view_count || 0}</span>
+                  <span style={{ color: '#3b82f6' }}>⬇️ {doc.download_count || 0}</span>
                 </div>
-                
-                <button onClick={() => handleUnsave(doc.id)} style={{ ...btnStyle, width: '100%', background: '#fee2e2', color: '#ef4444' }}>
-                  ❌ Bỏ lưu
-                </button>
+              </div>
+
+              {/* ACTIONS */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleView(doc)} style={{ ...btnStyle, flex: 1, background: '#f1f5f9', color: '#334155' }}>👀 Xem</button>
+                  <button onClick={() => handleDownload(doc)} style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff' }}>⬇️ Tải</button>
+                  <Link to={`/documents/${doc.id}`} style={{ ...btnStyle, flex: 1, background: '#f0fdf4', color: '#16a34a', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍 Chi tiết</Link>
+                </div>
+                <button onClick={() => handleUnsave(doc.id)} style={{ ...btnStyle, width: '100%', background: '#fee2e2', color: '#ef4444' }}>❌ Bỏ lưu</button>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

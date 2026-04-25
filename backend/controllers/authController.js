@@ -7,6 +7,11 @@ const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    if (!name || name.trim().length < 2) return res.status(400).json({ message: "Tên phải có ít nhất 2 ký tự" });
+    if (name.trim().length > 100) return res.status(400).json({ message: "Tên không được quá 100 ký tự" });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Email không hợp lệ" });
+    if (!password || password.length < 6) return res.status(400).json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
+
     // 1. Kiểm tra email đã tồn tại chưa
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
@@ -69,7 +74,7 @@ const getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: { id: true, name: true, email: true, role: true, created_at: true }
+      select: { id: true, name: true, email: true, role: true, avatar_url: true, created_at: true }
     });
     res.json(user);
   } catch (error) {
@@ -122,5 +127,21 @@ const changePassword = async (req, res) => {
   }
 };
 
-// Nhớ export thêm updateProfile nhé!
-module.exports = { register, login, getMe, updateProfile, changePassword };
+// [PUT] Admin reset mật khẩu cho user
+const adminResetPassword = async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: "Không có quyền" });
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+    await prisma.user.update({ where: { id: parseInt(id) }, data: { password: hashed } });
+    res.json({ message: "Đã reset mật khẩu thành công!" });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+module.exports = { register, login, getMe, updateProfile, changePassword, adminResetPassword };

@@ -12,6 +12,8 @@ import SavedDocuments from './pages/SavedDocuments';
 import NotFound from './pages/NotFound';
 import DocumentDetail from './pages/DocumentDetail';
 import Trash from './pages/Trash';
+import UserProfile from './pages/UserProfile';
+import DownloadHistory from './pages/DownloadHistory';
 import axiosClient from './api/axiosClient';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationBell from './components/NotificationBell';
@@ -47,6 +49,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('userId');
     window.location.href = '/login';
   };
 
@@ -87,6 +90,7 @@ function App() {
                       <LinkWithCloseMenu to="/profile" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>⚙️ Thông tin tài khoản</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/my-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📁 Tài liệu của tôi</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/saved-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>🔖 Tài liệu đã lưu</LinkWithCloseMenu>
+                      <LinkWithCloseMenu to="/download-history" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📥 Lịch sử tải xuống</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/trash" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#64748b', fontWeight: '500' }}>🗑️ Thùng rác</LinkWithCloseMenu>
                       {user.role === 'ADMIN' && (
                         <LinkWithCloseMenu to="/admin" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#b91c1c', fontWeight: 'bold', background: '#fee2e2' }}>🛡️ Trang Quản Trị</LinkWithCloseMenu>
@@ -128,6 +132,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/documents/:id" element={<DocumentDetail />} />
+            <Route path="/users/:userId" element={<UserProfile />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/upload" element={<ProtectedRoute user={user}><Upload /></ProtectedRoute>} />
@@ -136,6 +141,7 @@ function App() {
             <Route path="/admin" element={<ProtectedRoute user={user} adminOnly><AdminDashboard /></ProtectedRoute>} />
             <Route path="/saved-documents" element={<ProtectedRoute user={user}><SavedDocuments /></ProtectedRoute>} />
             <Route path="/trash" element={<ProtectedRoute user={user}><Trash /></ProtectedRoute>} />
+            <Route path="/download-history" element={<ProtectedRoute user={user}><DownloadHistory /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>

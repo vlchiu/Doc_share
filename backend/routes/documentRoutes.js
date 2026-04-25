@@ -1,13 +1,15 @@
 const express = require('express');
 const { 
-  uploadDocument, getAllDocuments, getDocumentById, getMyDocuments, 
+  uploadDocument, getAllDocuments, getDocumentById, getMyDocuments, getUserDocuments,
   updateDocument, deleteDocument, restoreDocument, permanentDeleteDocument, getTrashDocuments,
-  incrementDownload, incrementView, getComments, addComment, deleteComment,
+  incrementDownload, incrementView, getDownloadHistory, deleteDownloadHistory, clearDownloadHistory,
+  getComments, addComment, deleteComment,
   getPendingDocuments, approveDocument, rejectDocument,
-  toggleSaveDocument, getSavedDocuments
+  toggleSaveDocument, getSavedDocuments, rateDocument
 } = require('../controllers/documentController');
 const { verifyToken } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
+const { reportDocument } = require('../controllers/reportController');
 
 const router = express.Router();
 
@@ -15,6 +17,10 @@ const router = express.Router();
 router.get('/pending', verifyToken, getPendingDocuments);
 router.get('/saved', verifyToken, getSavedDocuments);
 router.get('/mine', verifyToken, getMyDocuments);
+router.get('/history', verifyToken, getDownloadHistory);
+router.delete('/history/clear', verifyToken, clearDownloadHistory);
+router.delete('/history/:historyId', verifyToken, deleteDownloadHistory);
+router.get('/user/:userId', getUserDocuments);
 router.get('/trash', verifyToken, getTrashDocuments);
 router.post('/upload', verifyToken, upload.single('file'), uploadDocument);
 router.delete('/comments/:commentId', verifyToken, deleteComment);
@@ -35,5 +41,7 @@ router.post('/:id/download', verifyToken, incrementDownload);
 router.post('/:id/view', incrementView);
 router.get('/:id/comments', getComments);
 router.post('/:id/comments', verifyToken, addComment);
+router.post('/:id/rate', verifyToken, rateDocument);
+router.post('/:id/report', verifyToken, reportDocument);
 
 module.exports = router;

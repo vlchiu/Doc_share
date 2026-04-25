@@ -1,6 +1,6 @@
 const express = require('express');
 // SỬA Ở ĐÂY: Thêm updateProfile vào danh sách import
-const { register, login, getMe, updateProfile, changePassword } = require('../controllers/authController'); 
+const { register, login, getMe, updateProfile, changePassword, adminResetPassword } = require('../controllers/authController'); 
 const { verifyToken } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware'); // Import middleware upload ảnh
 
@@ -17,5 +17,8 @@ router.put('/update-profile', verifyToken, upload.single('avatar'), updateProfil
 
 // Route đổi mật khẩu
 router.put('/change-password', verifyToken, changePassword);
+
+// Admin reset mật khẩu user
+router.put('/admin/reset-password/:id', verifyToken, adminResetPassword);
 
 module.exports = router;

@@ -9,7 +9,10 @@ function NotificationBell() {
   const ref = useRef(null);
   const navigate = useNavigate();
 
+  const isAuthenticated = !!localStorage.getItem('token');
+
   const fetchNotifications = async () => {
+    if (!localStorage.getItem('token')) return;
     try {
       const res = await axiosClient.get('/notifications');
       setNotifications(res.data.notifications);

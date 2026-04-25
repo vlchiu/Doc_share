@@ -14,6 +14,7 @@ function Login() {
     try {
       const res = await axiosClient.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.token);
+      localStorage.setItem('userId', res.data.user.id);
       toast.success('Đăng nhập thành công!');
       setTimeout(() => { window.location.href = '/'; }, 800);
     } catch (error) {

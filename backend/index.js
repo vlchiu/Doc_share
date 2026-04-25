@@ -8,6 +8,7 @@ const documentRoutes = require('./routes/documentRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const followRoutes = require('./routes/followRoutes');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/follow', followRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

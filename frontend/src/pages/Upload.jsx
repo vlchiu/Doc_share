@@ -18,14 +18,16 @@ function Upload() {
     }).catch(() => toast.error('Lỗi lấy danh mục!'));
   }, []);
 
+  const ALLOWED_TYPES = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/plain','image/jpeg','image/png','image/gif','application/zip','application/x-rar-compressed','application/xml','text/xml'];
+  const MAX_SIZE = 20 * 1024 * 1024;
+
   const handleFileChange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    if (f.size > MAX_SIZE) { toast.error('File quá lớn! Tối đa 20MB.'); e.target.value = null; return; }
+    if (!ALLOWED_TYPES.includes(f.type)) { toast.error('Loại file không được hỗ trợ!'); e.target.value = null; return; }
     setFile(f);
-    // Tự điền tên tài liệu nếu chưa nhập
-    if (!title.trim()) {
-      setTitle(f.name.replace(/\.[^/.]+$/, '')); // bỏ extension
-    }
+    if (!title.trim()) setTitle(f.name.replace(/\.[^/.]+$/, ''));
   };
 
   const handleUpload = async (e) => {

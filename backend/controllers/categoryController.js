@@ -35,6 +35,9 @@ const updateCategory = async (req, res) => {
     const { name, description } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: "Tên danh mục không được để trống" });
 
+    const existing = await prisma.category.findUnique({ where: { id: parseInt(id) } });
+    if (!existing) return res.status(404).json({ message: "Không tìm thấy danh mục" });
+
     const cat = await prisma.category.update({
       where: { id: parseInt(id) },
       data: { name: name.trim(), description: description?.trim() || null }
@@ -49,7 +52,7 @@ const deleteCategory = async (req, res) => {
   try {
     if (req.user.role !== 'ADMIN') return res.status(403).json({ message: "Không có quyền" });
     const { id } = req.params;
-    const count = await prisma.document.count({ where: { category_id: parseInt(id) } });
+    const count = await prisma.document.count({ where: { category_id: parseInt(id), deleted_at: null } });
     if (count > 0) return res.status(400).json({ message: `Không thể xóa — danh mục đang có ${count} tài liệu` });
 
     await prisma.category.delete({ where: { id: parseInt(id) } });

@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
 import Spinner from '../components/Spinner';
+import { openOrDownload, FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 function MyDocuments() {
   const [myDocs, setMyDocs] = useState([]);
@@ -45,16 +49,24 @@ function MyDocuments() {
     } catch { toast.error('Lỗi khi xóa!'); }
   };
 
-  const handleUpdateFile = async (e, docId) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!window.confirm('🔄 Thay thế nội dung bằng file mới?')) { e.target.value = null; return; }
-    const formData = new FormData();
-    formData.append('file', file);
+  const handleView = (doc) => {
+    axiosClient.post(`/documents/${doc.id}/view`).catch(() => {});
+    openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), () => handleDownload(doc));
+  };
+
+  const handleDownload = async (doc) => {
     try {
-      await axiosClient.put(`/documents/${docId}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success('Đã cập nhật file mới!');
-    } catch { toast.error('Lỗi tải file!'); }
+      await axiosClient.post(`/documents/${doc.id}/download`);
+      const res = await fetch(`${API_URL}${doc.file_url}`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = doc.file_url.split('/').pop() || doc.title;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+      setMyDocs(myDocs.map(d => d.id === doc.id ? { ...d, download_count: (d.download_count || 0) + 1 } : d));
+      toast.success('Đang tải xuống...');
+    } catch { toast.error('Lỗi khi tải file!'); }
   };
 
   const btnStyle = { padding: '9px 14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
@@ -72,10 +84,14 @@ function MyDocuments() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-          {myDocs.map(doc => (
+          {myDocs.map(doc => {
+            const fileIcon = FILE_ICONS[doc.file_type] || '📎';
+            const fileLabel = getFileLabel(doc.file_type, doc.file_url);
+            const bc = FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9', color: '#475569' };
+            return (
             <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-              {/* TITLE — inline edit */}
+              {/* TITLE + FILE ICON — inline edit */}
               {editingId === doc.id ? (
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input
@@ -89,9 +105,15 @@ function MyDocuments() {
                   <button onClick={cancelEdit} style={{ ...btnStyle, background: '#f1f5f9', color: '#64748b', padding: '8px 10px' }}>✕</button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1.4, flex: 1 }}>{doc.title}</h3>
-                  <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '16px', padding: '2px', flexShrink: 0 }} title="Sửa tên">✏️</button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '28px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                      <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1.4, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{doc.title}</h3>
+                      <span style={{ flexShrink: 0, padding: '2px 7px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', background: bc.bg, color: bc.color }}>{fileLabel}</span>
+                      <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px', padding: '2px', flexShrink: 0 }} title="Sửa tên">✏️</button>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -117,15 +139,21 @@ function MyDocuments() {
               </div>
 
               {/* ACTIONS */}
-              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                <input type="file" id={`fileInput-${doc.id}`} style={{ display: 'none' }} onChange={e => handleUpdateFile(e, doc.id)} />
-                <button onClick={() => document.getElementById(`fileInput-${doc.id}`).click()}
-                  style={{ ...btnStyle, flex: 1, background: '#e0e7ff', color: '#4f46e5' }}>🔄 Đổi file</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
+                {/* Nút xem/tải/chi tiết — chỉ hiện khi đã duyệt */}
+                {doc.status === 'APPROVED' && (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleView(doc)} style={{ ...btnStyle, flex: 1, background: '#f1f5f9', color: '#334155' }}>👀 Xem</button>
+                    <button onClick={() => handleDownload(doc)} style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff' }}>⬇️ Tải</button>
+                    <Link to={`/documents/${doc.id}`} style={{ ...btnStyle, flex: 1, background: '#f0fdf4', color: '#16a34a', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍 Chi tiết</Link>
+                  </div>
+                )}
                 <button onClick={() => handleDelete(doc.id)}
-                  style={{ ...btnStyle, flex: 1, background: '#fee2e2', color: '#ef4444' }}>🗑️ Thùng rác</button>
+                  style={{ ...btnStyle, width: '100%', background: '#fee2e2', color: '#ef4444' }}>🗑️ Thùng rác</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

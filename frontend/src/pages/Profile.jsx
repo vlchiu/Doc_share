@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -10,6 +11,7 @@ function Profile() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [docStats, setDocStats] = useState({ total: 0, approved: 0, pending: 0 });
+  const [topDocs, setTopDocs] = useState([]);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -25,9 +27,12 @@ function Profile() {
   const getStats = async () => {
     try {
       const res = await axiosClient.get('/documents/mine');
-      const approved = res.data.filter(d => d.status === 'APPROVED').length;
-      const pending = res.data.filter(d => d.status === 'PENDING').length;
-      setDocStats({ total: res.data.length, approved, pending });
+      const docs = Array.isArray(res.data) ? res.data : [];
+      const approved = docs.filter(d => d.status === 'APPROVED');
+      const pending = docs.filter(d => d.status === 'PENDING').length;
+      setDocStats({ total: docs.length, approved: approved.length, pending });
+      const sorted = [...approved].sort((a, b) => b.download_count - a.download_count).slice(0, 5);
+      setTopDocs(sorted.map(d => ({ name: d.title.length > 20 ? d.title.slice(0, 20) + '…' : d.title, tải: d.download_count, xem: d.view_count })));
     } catch {}
   };
 
@@ -113,6 +118,23 @@ function Profile() {
           <button type="submit" style={{ padding: '14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>Lưu thay đổi</button>
         </form>
       </div>
+
+      {/* BIỂU ĐỒ TÀI LIỆU */}
+      {topDocs.length > 0 && (
+        <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 'bold', color: '#1a1a1a' }}>📊 Top tài liệu của bạn</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={topDocs} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+              <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+              <Bar dataKey="tải" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="xem" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* ĐỔI MẬT KHẨU */}
       <div style={{ background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>

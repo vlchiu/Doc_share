@@ -23,6 +23,15 @@ function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [sortBy, setSortBy] = useState('newest');
+  const [fileType, setFileType] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Pending = đang chọn chưa áp dụng, Applied = đã áp dụng vào query
+  const [pendingFileType, setPendingFileType] = useState('');
+  const [pendingDateFrom, setPendingDateFrom] = useState('');
+  const [pendingDateTo, setPendingDateTo] = useState('');
+  const hasActiveFilter = fileType || dateFrom || dateTo;
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
   const [currentUser, setCurrentUser] = useState(null);
@@ -36,7 +45,7 @@ function Home() {
   const debouncedSearch = useDebounce(searchTerm, 400);
 
   // Reset page khi filter thay đổi
-  useEffect(() => { setPage(1); }, [debouncedSearch, selectedCategory, currentType, sortBy]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, selectedCategory, currentType, sortBy, fileType, dateFrom, dateTo]);
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
@@ -47,13 +56,16 @@ function Home() {
         ...(selectedCategory && { category: selectedCategory }),
         ...(currentType && { docType: currentType }),
         sortBy,
+        ...(fileType && { fileType }),
+        ...(dateFrom && { dateFrom }),
+        ...(dateTo && { dateTo }),
       });
       const res = await axiosClient.get(`/documents?${params}`);
       setDocuments(res.data.documents);
       setPagination(res.data.pagination);
     } catch { toast.error('Lỗi khi tải dữ liệu!'); }
     finally { setLoading(false); }
-  }, [page, debouncedSearch, selectedCategory, currentType, sortBy]);
+  }, [page, debouncedSearch, selectedCategory, currentType, sortBy, fileType, dateFrom, dateTo]);
 
   useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
 
@@ -64,7 +76,7 @@ function Home() {
       Promise.all([axiosClient.get('/auth/me'), axiosClient.get('/documents/saved')])
         .then(([userRes, savedRes]) => {
           setCurrentUser(userRes.data);
-          setSavedDocIds(savedRes.data.map(d => d.id));
+          setSavedDocIds(Array.isArray(savedRes.data) ? savedRes.data.map(d => d.id) : []);
         }).catch(() => {});
     }
   }, [isAuthenticated]);
@@ -103,11 +115,11 @@ function Home() {
   };
 
   const handleDeleteAdmin = async (docId) => {
-    if (!window.confirm('⚠️ Xóa vĩnh viễn tài liệu này?')) return;
+    if (!window.confirm('⚠️ Chuyển tài liệu vào thùng rác?')) return;
     try {
       await axiosClient.delete(`/documents/${docId}`);
       setDocuments(docs => docs.filter(d => d.id !== docId));
-      toast.success('Đã xóa tài liệu!');
+      toast.success('Đã chuyển vào thùng rác!');
     } catch { toast.error('Lỗi khi xóa!'); }
   };
 
@@ -123,10 +135,10 @@ function Home() {
       </p>
 
       {/* SEARCH + SORT */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
           <input
-            type="text" placeholder="🔍 Tìm kiếm tài liệu..."
+            type="text" placeholder="🔍 Tìm kiếm tài liệu, tên người đăng..."
             value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
             style={{ width: '100%', padding: '11px 40px 11px 20px', borderRadius: '30px', border: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.06)', outline: 'none', fontSize: '14px', boxSizing: 'border-box' }}
           />
@@ -141,7 +153,62 @@ function Home() {
           <option value="downloads">⬇️ Tải nhiều nhất</option>
           <option value="views">👁️ Xem nhiều nhất</option>
         </select>
+        <button onClick={() => setShowAdvanced(a => !a)}
+          style={{ padding: '11px 16px', borderRadius: '30px', border: '1px solid #e2e8f0', background: showAdvanced ? '#3b82f6' : '#fff', color: showAdvanced ? '#fff' : '#555', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', outline: 'none' }}>
+          🔧 Lọc nâng cao
+        </button>
       </div>
+
+      {/* BỘ LỌC NÂNG CAO */}
+      {showAdvanced && (
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', marginBottom: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Loại file</label>
+            <select value={pendingFileType} onChange={e => setPendingFileType(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', outline: 'none', background: '#f8fafc' }}>
+              <option value="">Tất cả</option>
+              <option value="pdf">PDF</option>
+              <option value="word">Word (DOC/DOCX)</option>
+              <option value="excel">Excel (XLS/XLSX)</option>
+              <option value="powerpoint">PowerPoint</option>
+              <option value="text/plain">TXT</option>
+              <option value="image">Ảnh</option>
+              <option value="zip">ZIP/RAR</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Từ ngày</label>
+            <input type="date" value={pendingDateFrom} onChange={e => setPendingDateFrom(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', outline: 'none', background: '#f8fafc' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '5px' }}>Đến ngày</label>
+            <input type="date" value={pendingDateTo} onChange={e => setPendingDateTo(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', outline: 'none', background: '#f8fafc' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+            <button
+              onClick={() => { setFileType(pendingFileType); setDateFrom(pendingDateFrom); setDateTo(pendingDateTo); setPage(1); }}
+              style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🔍 Áp dụng
+            </button>
+            {hasActiveFilter && (
+              <button onClick={() => { setFileType(''); setDateFrom(''); setDateTo(''); setPendingFileType(''); setPendingDateFrom(''); setPendingDateTo(''); setPage(1); }}
+                style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
+                ✕ Xóa lọc
+              </button>
+            )}
+          </div>
+          {hasActiveFilter && (
+            <div style={{ width: '100%', display: 'flex', gap: '6px', flexWrap: 'wrap', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>Đang lọc:</span>
+              {fileType && <span style={{ padding: '2px 10px', borderRadius: '20px', background: '#dbeafe', color: '#1d4ed8', fontSize: '12px', fontWeight: 'bold' }}>{fileType}</span>}
+              {dateFrom && <span style={{ padding: '2px 10px', borderRadius: '20px', background: '#dcfce7', color: '#15803d', fontSize: '12px', fontWeight: 'bold' }}>Từ {dateFrom}</span>}
+              {dateTo && <span style={{ padding: '2px 10px', borderRadius: '20px', background: '#dcfce7', color: '#15803d', fontSize: '12px', fontWeight: 'bold' }}>Đến {dateTo}</span>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CATEGORY FILTER */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
@@ -195,11 +262,14 @@ function Home() {
                     </div>
 
                     <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '9px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>👤 <b style={{ color: '#334155' }}>{doc.user?.name}</b> · 🏷️ {doc.doc_type}</span>
+                      <span>👤 <Link to={`/users/${doc.user?.id}`} style={{ color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none' }}>{doc.user?.name}</Link> · 🏷️ {doc.doc_type}</span>
                       <div style={{ display: 'flex', gap: '10px', fontWeight: 'bold' }}>
                         <span>👁️ {doc.view_count || 0}</span>
                         <span style={{ color: '#3b82f6' }}>⬇️ {doc.download_count || 0}</span>
                       </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      📅 {new Date(doc.created_at).toLocaleDateString('vi-VN')}
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>

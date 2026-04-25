@@ -8,17 +8,26 @@ const getAllUsers = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
+    const search = req.query.search?.trim() || '';
+
+    const where = search ? {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ]
+    } : {};
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
+        where,
         select: { id: true, name: true, email: true, role: true, is_active: true, created_at: true,
-          _count: { select: { documents: true, comments: true } }
+          _count: { select: { documents: true } }
         },
         orderBy: { created_at: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.user.count()
+      prisma.user.count({ where })
     ]);
 
     res.json({ users, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } });
@@ -83,18 +92,40 @@ const getStats = async (req, res) => {
 
     const [totalUsers, totalDocs, pendingDocs, totalComments, topDocs] = await Promise.all([
       prisma.user.count(),
-      prisma.document.count({ where: { status: 'APPROVED' } }),
-      prisma.document.count({ where: { status: 'PENDING' } }),
+      prisma.document.count({ where: { status: 'APPROVED', deleted_at: null } }),
+      prisma.document.count({ where: { status: 'PENDING', deleted_at: null } }),
       prisma.comment.count(),
       prisma.document.findMany({
-        where: { status: 'APPROVED' },
+        where: { status: 'APPROVED', deleted_at: null },
         orderBy: { download_count: 'desc' },
         take: 5,
         select: { id: true, title: true, download_count: true, view_count: true }
       })
     ]);
 
-    res.json({ totalUsers, totalDocs, pendingDocs, totalComments, topDocs });
+    // Thống kê 7 ngày gần nhất
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+
+    const chartData = await Promise.all(days.map(async (day) => {
+      const nextDay = new Date(day);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const [uploads, downloads] = await Promise.all([
+        prisma.document.count({ where: { created_at: { gte: day, lt: nextDay } } }),
+        prisma.downloadHistory.count({ where: { created_at: { gte: day, lt: nextDay } } }),
+      ]);
+      return {
+        date: day.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+        uploads,
+        downloads,
+      };
+    }));
+
+    res.json({ totalUsers, totalDocs, pendingDocs, totalComments, topDocs, chartData });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
