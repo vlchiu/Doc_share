@@ -82,15 +82,22 @@ function Profile() {
   if (!user) return <p>Đang tải...</p>;
 
   return (
-    <div style={{ maxWidth: '600px', margin: '40px auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      
+    <div style={{ maxWidth: '620px', margin: '30px auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
       {/* THÔNG TIN CÁ NHÂN */}
-      <div style={{ background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '24px', color: '#1a1a1a' }}>⚙️ Thiết lập tài khoản</h2>
+      <div style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
+        {/* Header gradient */}
+        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 60%, #06b6d4 100%)', padding: '28px 32px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+          <h2 style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: 'bold', position: 'relative' }}>⚙️ Thiết lập tài khoản</h2>
+          <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: '13px', position: 'relative' }}>Quản lý thông tin cá nhân của bạn</p>
+        </div>
+
+        <div style={{ background: '#fff', padding: '28px 32px' }}>
         <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
             <div style={{ position: 'relative', width: '110px', height: '110px' }}>
-              <img src={preview || (user.avatar_url ? `${API_URL}${user.avatar_url}` : `https://ui-avatars.com/api/?name=${user.name}&background=random`)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '4px solid #e2e8f0' }} />
+              <img src={preview || (user.avatar_url ? (user.avatar_url.startsWith('http') ? user.avatar_url : `${API_URL}${user.avatar_url}`) : `https://ui-avatars.com/api/?name=${user.name}&background=random`)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '4px solid #e2e8f0' }} />
               <label htmlFor="avatar-input" style={{ position: 'absolute', bottom: '4px', right: '4px', background: '#3b82f6', color: '#fff', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '13px' }}>📷</label>
               <input id="avatar-input" type="file" hidden onChange={onFileChange} accept="image/*" />
             </div>
@@ -115,8 +122,9 @@ function Profile() {
             ))}
           </div>
 
-          <button type="submit" style={{ padding: '14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>Lưu thay đổi</button>
+          <button type="submit" style={{ padding: '14px', background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px', boxShadow: '0 4px 14px rgba(16,185,129,0.35)' }}>Lưu thay đổi</button>
         </form>
+        </div>
       </div>
 
       {/* BIỂU ĐỒ TÀI LIỆU */}
@@ -137,15 +145,20 @@ function Profile() {
       )}
 
       {/* ĐỔI MẬT KHẨU */}
-      <div style={{ background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-        <h3 style={{ marginBottom: '20px', color: '#1a1a1a' }}>🔒 Đổi mật khẩu</h3>
+      <div style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
+        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%)', padding: '20px 32px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+          <h3 style={{ margin: 0, color: '#fff', fontSize: '17px', fontWeight: 'bold', position: 'relative' }}>🔒 Đổi mật khẩu</h3>
+        </div>
+        <div style={{ background: '#fff', padding: '28px 32px' }}>
         <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div><label style={labelStyle}>Mật khẩu hiện tại:</label><input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={inputStyle} required /></div>
           <div><label style={labelStyle}>Mật khẩu mới:</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputStyle} required /></div>
           <div><label style={labelStyle}>Xác nhận mật khẩu mới:</label><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={inputStyle} required /></div>
           {pwMsg && <p style={{ margin: 0, color: pwMsg.type === 'error' ? '#ef4444' : '#10b981', fontWeight: 'bold', fontSize: '14px' }}>{pwMsg.text}</p>}
-          <button type="submit" style={{ padding: '14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>Đổi mật khẩu</button>
+          <button type="submit" style={{ padding: '14px', background: 'linear-gradient(135deg, #3b82f6, #7c3aed)', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px', boxShadow: '0 4px 14px rgba(59,130,246,0.35)' }}>Đổi mật khẩu</button>
         </form>
+        </div>
       </div>
     </div>
   );

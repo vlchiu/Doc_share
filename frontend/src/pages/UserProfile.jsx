@@ -53,25 +53,34 @@ function UserProfile() {
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', color: '#1a1a1a' }}>
       {/* HEADER USER */}
-      <div style={{ background: '#fff', borderRadius: '16px', padding: '28px 32px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', marginBottom: '24px', display: 'flex', gap: '20px', alignItems: 'center' }}>
-        <div style={{ width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '28px', fontWeight: 'bold', flexShrink: 0 }}>
-          {user.avatar_url
-            ? <img src={`${API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : user.name.charAt(0).toUpperCase()}
+      <div style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: '24px' }}>
+        {/* Gradient banner */}
+        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 60%, #06b6d4 100%)', height: '80px', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
         </div>
-        <div>
-          <h2 style={{ margin: '0 0 6px', fontSize: '22px', fontWeight: 'bold' }}>{user.name}</h2>
-          <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '14px' }}>
-            📅 Tham gia {new Date(user.created_at).toLocaleDateString('vi-VN')} · 📄 {documents.length} tài liệu
-            · <button onClick={() => openFollowModal('followers')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontWeight: 'bold', fontSize: '14px', padding: 0 }}>{followStatus.followers} người theo dõi</button>
-            · <button onClick={() => openFollowModal('following')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontWeight: 'bold', fontSize: '14px', padding: 0 }}>đang theo dõi {followStatus.following}</button>
-          </p>
-          {isAuthenticated && String(userId) !== String(currentUserId) && (
-            <button onClick={handleToggleFollow}
-              style={{ padding: '8px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', background: followStatus.isFollowing ? '#fee2e2' : '#3b82f6', color: followStatus.isFollowing ? '#b91c1c' : '#fff' }}>
-              {followStatus.isFollowing ? '✕ Bỏ theo dõi' : '+ Theo dõi'}
-            </button>
-          )}
+        <div style={{ background: '#fff', padding: '0 32px 24px', display: 'flex', gap: '20px', alignItems: 'flex-end' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '28px', fontWeight: 'bold', flexShrink: 0, border: '4px solid #fff', marginTop: '-40px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            {user.avatar_url
+              ? <img src={`${API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : user.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1, paddingBottom: '4px' }}>
+            <h2 style={{ margin: '0 0 4px', fontSize: '20px', fontWeight: 'bold', color: '#1a1a1a' }}>{user.name}</h2>
+            <p style={{ margin: '0 0 10px', color: '#64748b', fontSize: '13px' }}>
+              📅 Tham gia {new Date(user.created_at).toLocaleDateString('vi-VN')} · 📄 {documents.length} tài liệu
+            </p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button onClick={() => openFollowModal('followers')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontWeight: 'bold', fontSize: '13px', padding: 0 }}>{followStatus.followers} người theo dõi</button>
+              <span style={{ color: '#e2e8f0' }}>·</span>
+              <button onClick={() => openFollowModal('following')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontWeight: 'bold', fontSize: '13px', padding: 0 }}>đang theo dõi {followStatus.following}</button>
+              {isAuthenticated && String(userId) !== String(currentUserId) && (
+                <button onClick={handleToggleFollow}
+                  style={{ padding: '6px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', background: followStatus.isFollowing ? '#fee2e2' : 'linear-gradient(135deg, #3b82f6, #06b6d4)', color: followStatus.isFollowing ? '#b91c1c' : '#fff', boxShadow: followStatus.isFollowing ? 'none' : '0 2px 8px rgba(59,130,246,0.35)' }}>
+                  {followStatus.isFollowing ? '✕ Bỏ theo dõi' : '+ Theo dõi'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -45,8 +45,13 @@ function SavedDocuments() {
   const btnStyle = { padding: '10px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
 
   return (
-    <div style={{ padding: '30px 20px', color: '#1e293b' }}>
-      <h2 style={{ color: '#334155', fontSize: '28px', marginBottom: '20px' }}>🔖 Tài liệu đã lưu</h2>
+    <div style={{ color: '#1e293b' }}>
+      {/* HEADER */}
+      <div style={{ background: 'linear-gradient(135deg, #065f46 0%, #10b981 60%, #06b6d4 100%)', borderRadius: '16px', padding: '24px 32px', marginBottom: '24px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+        <h2 style={{ margin: '0 0 4px', fontSize: '22px', color: '#fff', fontWeight: 'bold', position: 'relative' }}>🔖 Tài liệu đã lưu</h2>
+        <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: '13px', position: 'relative' }}>{savedDocs.length} tài liệu</p>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '25px' }}>
         {savedDocs.length === 0 ? (

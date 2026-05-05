@@ -63,8 +63,19 @@ function Upload() {
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '40px auto', background: '#fff', padding: '40px', borderRadius: '16px', boxShadow: '0 8px 30px rgba(0,0,0,0.07)' }}>
-      <h2 style={{ color: '#1a1a1a', textAlign: 'center', marginBottom: '30px', fontSize: '22px' }}>📤 Tải lên Tài liệu mới</h2>
+    <div style={{ maxWidth: '620px', margin: '30px auto' }}>
+      {/* HEADER GRADIENT */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 60%, #06b6d4 100%)',
+        borderRadius: '16px 16px 0 0', padding: '28px 36px',
+        position: 'relative', overflow: 'hidden'
+      }}>
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+        <h2 style={{ margin: 0, color: '#fff', fontSize: '22px', fontWeight: 'bold', position: 'relative' }}>📤 Tải lên Tài liệu mới</h2>
+        <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: '13px', position: 'relative' }}>Tài liệu sẽ được kiểm duyệt trước khi hiển thị</p>
+      </div>
+
+      <div style={{ background: '#fff', padding: '32px 36px', borderRadius: '0 0 16px 16px', boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }}>
       <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
         {/* CHỌN FILE — đặt lên đầu để tự điền tên */}
@@ -135,6 +146,7 @@ function Upload() {
         </button>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </form>
+      </div>
     </div>
   );
 }

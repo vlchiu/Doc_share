@@ -66,6 +66,7 @@ function DocumentDetail() {
   };
 
   const handleView = async () => {
+    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để xem tài liệu!'); return; }
     try {
       await axiosClient.post(`/documents/${id}/view`);
       openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), handleDownload);
@@ -199,7 +200,10 @@ function DocumentDetail() {
             {/* NÚT HÀNH ĐỘNG */}
             <div style={{ padding: '24px 32px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               {PREVIEWABLE.includes(doc.file_type) ? (
-                <button onClick={() => setShowPreview(p => !p)} style={{ padding: '12px 24px', background: showPreview ? '#3b82f6' : '#f1f5f9', color: showPreview ? '#fff' : '#334155', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
+                <button onClick={() => {
+                  if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để xem tài liệu!'); return; }
+                  setShowPreview(p => !p);
+                }} style={{ padding: '12px 24px', background: showPreview ? '#3b82f6' : '#f1f5f9', color: showPreview ? '#fff' : '#334155', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
                   {showPreview ? '🔼 Đóng xem' : '👀 Xem tài liệu'}
                 </button>
               ) : (

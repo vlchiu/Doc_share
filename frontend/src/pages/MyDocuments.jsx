@@ -75,7 +75,12 @@ function MyDocuments() {
 
   return (
     <div style={{ color: '#1e293b' }}>
-      <h2 style={{ color: '#334155', fontSize: '26px', marginBottom: '24px' }}>📁 Tài liệu của tôi</h2>
+      {/* HEADER */}
+      <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 60%, #06b6d4 100%)', borderRadius: '16px', padding: '24px 32px', marginBottom: '24px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+        <h2 style={{ margin: '0 0 4px', fontSize: '22px', color: '#fff', fontWeight: 'bold', position: 'relative' }}>📁 Tài liệu của tôi</h2>
+        <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: '13px', position: 'relative' }}>{myDocs.length} tài liệu</p>
+      </div>
 
       {myDocs.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -89,7 +94,10 @@ function MyDocuments() {
             const fileLabel = getFileLabel(doc.file_type, doc.file_url);
             const bc = FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9', color: '#475569' };
             return (
-            <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div key={doc.id} style={{ background: '#fff', padding: '20px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #f1f5f9', transition: '0.2s' }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(59,130,246,0.1)'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.05)'; e.currentTarget.style.borderColor = '#f1f5f9'; }}
+            >
 
               {/* TITLE + FILE ICON — inline edit */}
               {editingId === doc.id ? (

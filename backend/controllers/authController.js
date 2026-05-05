@@ -114,6 +114,10 @@ const changePassword = async (req, res) => {
     if (newPassword.length < 6) return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    // User đăng nhập Google không có password
+    if (!user.password) return res.status(400).json({ message: "Tài khoản Google không thể đổi mật khẩu theo cách này" });
+
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ message: "Mật khẩu hiện tại không đúng" });
 

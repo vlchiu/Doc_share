@@ -99,6 +99,7 @@ function Home() {
   };
 
   const handleView = async (doc) => {
+    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để xem tài liệu!'); return; }
     try {
       await axiosClient.post(`/documents/${doc.id}/view`);
       openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), () => handleDownload(doc));
@@ -127,12 +128,35 @@ function Home() {
 
   return (
     <div style={{ color: '#1a1a1a' }}>
-      <h2 style={{ textAlign: 'center', fontSize: '26px', marginBottom: '8px' }}>
-        {currentType ? `📂 ${currentType}` : '📚 Thư viện Tài liệu'}
-      </h2>
-      <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', marginBottom: '18px' }}>
-        {pagination.total > 0 ? `${pagination.total} tài liệu` : ''}
-      </p>
+      {/* HERO BANNER */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 60%, #06b6d4 100%)',
+        borderRadius: '20px', padding: '36px 40px', marginBottom: '32px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        position: 'relative', overflow: 'hidden'
+      }}>
+        <div style={{ position: 'absolute', top: '-40px', right: '10%', width: '200px', height: '200px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+        <div style={{ position: 'absolute', bottom: '-30px', right: '30%', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ position: 'relative' }}>
+          <h1 style={{ margin: '0 0 8px', fontSize: '26px', fontWeight: 'bold', color: '#fff' }}>
+            {currentType ? `📂 ${currentType}` : '📚 Thư viện Tài liệu'}
+          </h1>
+          <p style={{ margin: 0, color: 'rgba(255,255,255,0.75)', fontSize: '14px' }}>
+            {pagination.total > 0 ? `${pagination.total} tài liệu đang có sẵn` : 'Khám phá và chia sẻ tài liệu'}
+          </p>
+        </div>
+        <div style={{ position: 'relative', display: 'flex', gap: '16px' }}>
+          {[
+            { icon: '📄', label: 'Tài liệu', value: pagination.total || '—' },
+          ].map(s => (
+            <div key={s.label} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '12px 20px', textAlign: 'center', backdropFilter: 'blur(10px)' }}>
+              <div style={{ fontSize: '22px' }}>{s.icon}</div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{s.value}</div>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* SEARCH + SORT */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -239,7 +263,10 @@ function Home() {
                 const fileIcon = FILE_ICONS[doc.file_type] || '📎';
                 const fileLabel = getFileLabel(doc.file_type, doc.file_url);
                 return (
-                  <div key={doc.id} style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div key={doc.id} style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #f1f5f9', transition: '0.2s', cursor: 'default' }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(59,130,246,0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.05)'; e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                       <span style={{ fontSize: '30px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>

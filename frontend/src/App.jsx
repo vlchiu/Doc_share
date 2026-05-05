@@ -14,6 +14,7 @@ import DocumentDetail from './pages/DocumentDetail';
 import Trash from './pages/Trash';
 import UserProfile from './pages/UserProfile';
 import DownloadHistory from './pages/DownloadHistory';
+import GoogleAuthSuccess from './pages/GoogleAuthSuccess';
 import axiosClient from './api/axiosClient';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationBell from './components/NotificationBell';
@@ -53,19 +54,17 @@ function App() {
     window.location.href = '/login';
   };
 
-  // STYLE CHO NAVLINK TẦNG 2 - Bo góc mềm mại hơn
-  const navLinkStyle = { textDecoration: 'none', color: '#555', fontWeight: 'bold', fontSize: '15px', padding: '10px 15px', borderRadius: '30px', transition: '0.2s' };
-
   return (
     <Router>
       <Toaster position="top-right" toastOptions={{ duration: 3000, style: { borderRadius: '10px', fontWeight: '500' } }} />
-      <div style={{ fontFamily: 'Inter, sans-serif', background: '#f8fafc', minHeight: '100vh', color: '#333' }}>
+      <div style={{ fontFamily: 'Inter, sans-serif', background: 'linear-gradient(180deg, #f0f7ff 0%, #f8fafc 300px)', minHeight: '100vh', color: '#333' }}>
         
         {/* TẦNG 1 */}
-        <nav style={{ background: '#fff', padding: '0 30px', height: '65px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', zIndex: 1000, position: 'relative' }}>
+        <nav style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)', padding: '0 30px', height: '65px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1000, position: 'relative', boxShadow: '0 2px 20px rgba(30,58,138,0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Link to="/" style={{ textDecoration: 'none', color: '#1a1a1a', fontSize: '22px', fontWeight: 'bold' }}>
-              📚 <span style={{ color: '#3b82f6' }}>Doc</span>Share
+            <Link to="/" style={{ textDecoration: 'none', color: '#fff', fontSize: '22px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '8px', padding: '4px 8px', fontSize: '20px' }}>📚</span>
+              <span><span style={{ color: '#93c5fd' }}>Doc</span>Share</span>
             </Link>
           </div>
 
@@ -74,12 +73,14 @@ function App() {
               <div style={{ position: 'relative' }} id="user-menu">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <NotificationBell />
-                  <div onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '5px 10px', borderRadius: '30px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#cbd5e1', color: '#fff', fontWeight: 'bold', fontSize: '16px' }}>
-                      {user.avatar_url ? <img src={`${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.name.charAt(0).toUpperCase()}
+                  <div onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '5px 10px', borderRadius: '30px', background: 'rgba(255,255,255,0.1)' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 'bold', fontSize: '16px', border: '2px solid rgba(255,255,255,0.3)' }}>
+                      {user.avatar_url
+                        ? <img src={user.avatar_url.startsWith('http') ? user.avatar_url : `${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : user.name.charAt(0).toUpperCase()}
                     </div>
-                    <span style={{ fontWeight: 'bold', color: '#1a1a1a' }}>{user.name}</span>
-                    <span style={{ fontSize: '12px', color: '#888' }}>▼</span>
+                    <span style={{ fontWeight: 'bold', color: '#fff' }}>{user.name}</span>
+                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>▼</span>
                   </div>
                 </div>
 
@@ -104,24 +105,30 @@ function App() {
               </div>
             ) : (
               <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <Link to="/login" style={{ textDecoration: 'none', color: '#555', fontWeight: 'bold' }}>Đăng nhập</Link>
-                <Link to="/register" style={{ textDecoration: 'none', color: '#fff', background: '#3b82f6', fontWeight: 'bold', padding: '10px 20px', borderRadius: '20px' }}>Đăng ký</Link>
+                <Link to="/login" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.85)', fontWeight: 'bold' }}>Đăng nhập</Link>
+                <Link to="/register" style={{ textDecoration: 'none', color: '#1d4ed8', background: '#fff', fontWeight: 'bold', padding: '9px 20px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>Đăng ký</Link>
               </div>
             )}
           </div>
         </nav>
 
-        {/* TẦNG 2 - Nút Tải lên nổi bật */}
-        <div style={{ background: '#fff', padding: '0 30px', height: '55px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #ddd', position: 'sticky', top: 0, zIndex: 999 }}>
-          <Link to="/" style={navLinkStyle}>Trang chủ</Link>
-          <Link to="/?type=Chung" style={navLinkStyle}>Chung</Link>
-          <Link to="/?type=Hardware" style={navLinkStyle}>Hardware</Link>
-          <Link to="/?type=Software" style={navLinkStyle}>Software</Link>
-          <Link to="/?type=Thông báo" style={navLinkStyle}>Thông báo</Link>
-          
+        {/* TẦNG 2 */}
+        <div style={{ background: '#fff', padding: '0 30px', height: '50px', display: 'flex', alignItems: 'center', gap: '4px', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 999, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+          {[
+            { to: '/', label: 'Trang chủ' },
+            { to: '/?type=Chung', label: 'Chung' },
+            { to: '/?type=Hardware', label: 'Hardware' },
+            { to: '/?type=Software', label: 'Software' },
+            { to: '/?type=Thông báo', label: 'Thông báo' },
+          ].map(item => (
+            <Link key={item.to} to={item.to} style={{ textDecoration: 'none', color: '#555', fontWeight: '600', fontSize: '14px', padding: '8px 14px', borderRadius: '8px', transition: '0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.color = '#3b82f6'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#555'; }}>
+              {item.label}
+            </Link>
+          ))}
           {isAuthenticated && (
-            // Nút Tải lên nổi bật duy nhất trên thanh điều hướng
-            <Link to="/upload" style={{ ...navLinkStyle, background: '#e0f2fe', color: '#0369a1', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Link to="/upload" style={{ marginLeft: 'auto', textDecoration: 'none', color: '#fff', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', fontWeight: 'bold', padding: '8px 18px', borderRadius: '20px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 10px rgba(59,130,246,0.35)' }}>
               📤 Tải lên
             </Link>
           )}
@@ -142,6 +149,7 @@ function App() {
             <Route path="/saved-documents" element={<ProtectedRoute user={user}><SavedDocuments /></ProtectedRoute>} />
             <Route path="/trash" element={<ProtectedRoute user={user}><Trash /></ProtectedRoute>} />
             <Route path="/download-history" element={<ProtectedRoute user={user}><DownloadHistory /></ProtectedRoute>} />
+            <Route path="/auth/google/success" element={<GoogleAuthSuccess />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
