@@ -99,6 +99,15 @@ function DocumentDetail() {
     } catch { toast.error('Lỗi!'); }
   };
 
+  const handleAdminDelete = async () => {
+    if (!window.confirm('⚠️ Chuyển tài liệu vào thùng rác?')) return;
+    try {
+      await axiosClient.delete(`/documents/${id}`);
+      toast.success('Đã chuyển vào thùng rác!');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    } catch { toast.error('Lỗi khi xóa!'); }
+  };
+
   const handleSubmitComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
@@ -223,6 +232,9 @@ function DocumentDetail() {
                   try { await axiosClient.post(`/documents/${id}/report`, { reason }); toast.success('Đã gửi báo cáo!'); }
                   catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
                 }} style={{ padding: '12px 24px', background: '#fff5f5', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>🚨 Báo cáo</button>
+              )}
+              {currentUser?.role === 'ADMIN' && (
+                <button onClick={handleAdminDelete} style={{ padding: '12px 24px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>🗑️ Xóa tài liệu</button>
               )}
             </div>
 

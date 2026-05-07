@@ -2,11 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
-import Spinner from '../components/Spinner';
 import { SkeletonGrid } from '../components/SkeletonCard';
-import { openOrDownload, FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
 
 function useDebounce(value, delay) {
   const [debounced, setDebounced] = useState(value);
@@ -27,24 +24,18 @@ function Home() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  // Pending = đang chọn chưa áp dụng, Applied = đã áp dụng vào query
   const [pendingFileType, setPendingFileType] = useState('');
   const [pendingDateFrom, setPendingDateFrom] = useState('');
   const [pendingDateTo, setPendingDateTo] = useState('');
   const hasActiveFilter = fileType || dateFrom || dateTo;
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
-  const [currentUser, setCurrentUser] = useState(null);
-  const [savedDocIds, setSavedDocIds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const isAuthenticated = !!localStorage.getItem('token');
 
   const location = useLocation();
   const currentType = new URLSearchParams(location.search).get('type') || '';
-
   const debouncedSearch = useDebounce(searchTerm, 400);
 
-  // Reset page khi filter thay đổi
   useEffect(() => { setPage(1); }, [debouncedSearch, selectedCategory, currentType, sortBy, fileType, dateFrom, dateTo]);
 
   const fetchDocuments = useCallback(async () => {
@@ -69,62 +60,9 @@ function Home() {
 
   useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
 
-  // Load categories + user info 1 lần
   useEffect(() => {
-    axiosClient.get('/categories').then(res => setCategories(res.data));
-    if (isAuthenticated) {
-      Promise.all([axiosClient.get('/auth/me'), axiosClient.get('/documents/saved')])
-        .then(([userRes, savedRes]) => {
-          setCurrentUser(userRes.data);
-          setSavedDocIds(Array.isArray(savedRes.data) ? savedRes.data.map(d => d.id) : []);
-        }).catch(() => {});
-    }
-  }, [isAuthenticated]);
-
-  const handleDownload = async (doc) => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để tải xuống!'); return; }
-    try {
-      await axiosClient.post(`/documents/${doc.id}/download`);
-      const res = await fetch(`${API_URL}${doc.file_url}`);
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.file_url.split('/').pop() || doc.title;
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-      setDocuments(docs => docs.map(d => d.id === doc.id ? { ...d, download_count: d.download_count + 1 } : d));
-      toast.success('Đang tải xuống...');
-    } catch { toast.error('Lỗi khi tải file!'); }
-  };
-
-  const handleView = async (doc) => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để xem tài liệu!'); return; }
-    try {
-      await axiosClient.post(`/documents/${doc.id}/view`);
-      openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), () => handleDownload(doc));
-      setDocuments(docs => docs.map(d => d.id === doc.id ? { ...d, view_count: d.view_count + 1 } : d));
-    } catch {}
-  };
-
-  const handleToggleSave = async (docId) => {
-    try {
-      const res = await axiosClient.post(`/documents/${docId}/save`);
-      if (res.data.isSaved) { setSavedDocIds(ids => [...ids, docId]); toast.success('Đã lưu tài liệu!'); }
-      else { setSavedDocIds(ids => ids.filter(id => id !== docId)); toast('Đã bỏ lưu.'); }
-    } catch { toast.error('Lỗi khi lưu!'); }
-  };
-
-  const handleDeleteAdmin = async (docId) => {
-    if (!window.confirm('⚠️ Chuyển tài liệu vào thùng rác?')) return;
-    try {
-      await axiosClient.delete(`/documents/${docId}`);
-      setDocuments(docs => docs.filter(d => d.id !== docId));
-      toast.success('Đã chuyển vào thùng rác!');
-    } catch { toast.error('Lỗi khi xóa!'); }
-  };
-
-  const btnStyle = { padding: '9px 0', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
+    axiosClient.get('/categories').then(res => setCategories(res.data)).catch(() => {});
+  }, []);
 
   return (
     <div style={{ color: '#1a1a1a' }}>
@@ -145,16 +83,12 @@ function Home() {
             {pagination.total > 0 ? `${pagination.total} tài liệu đang có sẵn` : 'Khám phá và chia sẻ tài liệu'}
           </p>
         </div>
-        <div style={{ position: 'relative', display: 'flex', gap: '16px' }}>
-          {[
-            { icon: '📄', label: 'Tài liệu', value: pagination.total || '—' },
-          ].map(s => (
-            <div key={s.label} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '12px 20px', textAlign: 'center', backdropFilter: 'blur(10px)' }}>
-              <div style={{ fontSize: '22px' }}>{s.icon}</div>
-              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{s.value}</div>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>{s.label}</div>
-            </div>
-          ))}
+        <div style={{ position: 'relative' }}>
+          <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '12px 20px', textAlign: 'center', backdropFilter: 'blur(10px)' }}>
+            <div style={{ fontSize: '22px' }}>📄</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{pagination.total || '—'}</div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>Tài liệu</div>
+          </div>
         </div>
       </div>
 
@@ -211,9 +145,8 @@ function Home() {
               style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', outline: 'none', background: '#f8fafc' }} />
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-            <button
-              onClick={() => { setFileType(pendingFileType); setDateFrom(pendingDateFrom); setDateTo(pendingDateTo); setPage(1); }}
-              style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button onClick={() => { setFileType(pendingFileType); setDateFrom(pendingDateFrom); setDateTo(pendingDateTo); setPage(1); }}
+              style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
               🔍 Áp dụng
             </button>
             {hasActiveFilter && (
@@ -259,69 +192,51 @@ function Home() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
               {documents.map(doc => {
-                const isSaved = savedDocIds.includes(doc.id);
                 const fileIcon = FILE_ICONS[doc.file_type] || '📎';
                 const fileLabel = getFileLabel(doc.file_type, doc.file_url);
                 return (
-                  <div key={doc.id} style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #f1f5f9', transition: '0.2s', cursor: 'default' }}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(59,130,246,0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.05)'; e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                  >
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: '30px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <Link to={`/documents/${doc.id}`} style={{ textDecoration: 'none', color: '#1a1a1a', flex: 1, minWidth: 0 }}>
-                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                  <Link key={doc.id} to={`/documents/${doc.id}`} style={{ textDecoration: 'none', display: 'block' }}>
+                    <div style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #f1f5f9', transition: '0.2s', cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(59,130,246,0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.05)'; e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    >
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '30px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', lineHeight: 1.4, color: '#1a1a1a', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', flex: 1, minWidth: 0 }}>
                               {doc.title}
                             </h3>
-                          </Link>
-                          <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: (FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9' }).bg, color: (FILE_BADGE_COLORS[fileLabel] || { color: '#475569' }).color }}>
-                            {fileLabel}
-                          </span>
+                            <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: (FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9' }).bg, color: (FILE_BADGE_COLORS[fileLabel] || { color: '#475569' }).color }}>
+                              {fileLabel}
+                            </span>
+                          </div>
+                          {doc.description && (
+                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                              {doc.description}
+                            </p>
+                          )}
                         </div>
-                        {doc.description && (
-                          <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                            {doc.description}
-                          </p>
-                        )}
+                      </div>
+
+                      <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '9px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>👤 <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>{doc.user?.name}</span> · 🏷️ {doc.doc_type}</span>
+                        <div style={{ display: 'flex', gap: '10px', fontWeight: 'bold' }}>
+                          <span>👁️ {doc.view_count || 0}</span>
+                          <span style={{ color: '#3b82f6' }}>⬇️ {doc.download_count || 0}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                        📅 {new Date(doc.created_at).toLocaleDateString('vi-VN')}
                       </div>
                     </div>
-
-                    <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '9px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>👤 <Link to={`/users/${doc.user?.id}`} style={{ color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none' }}>{doc.user?.name}</Link> · 🏷️ {doc.doc_type}</span>
-                      <div style={{ display: 'flex', gap: '10px', fontWeight: 'bold' }}>
-                        <span>👁️ {doc.view_count || 0}</span>
-                        <span style={{ color: '#3b82f6' }}>⬇️ {doc.download_count || 0}</span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                      📅 {new Date(doc.created_at).toLocaleDateString('vi-VN')}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                      <button onClick={() => handleView(doc)} style={{ ...btnStyle, flex: 1, background: '#f1f5f9', color: '#334155' }}>👀 Xem</button>
-                      <button onClick={() => handleDownload(doc)} style={{ ...btnStyle, flex: 1, background: '#3b82f6', color: '#fff' }}>⬇️ Tải</button>
-                      <Link to={`/documents/${doc.id}`} style={{ ...btnStyle, flex: 1, background: '#f0fdf4', color: '#16a34a', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍 Chi tiết</Link>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {isAuthenticated && (
-                        <button onClick={() => handleToggleSave(doc.id)} style={{ ...btnStyle, flex: 1, background: isSaved ? '#fee2e2' : '#fef3c7', color: isSaved ? '#b91c1c' : '#d97706' }}>
-                          {isSaved ? '❌ Bỏ lưu' : '🔖 Lưu'}
-                        </button>
-                      )}
-                      {currentUser?.role === 'ADMIN' && (
-                        <button onClick={() => handleDeleteAdmin(doc.id)} style={{ ...btnStyle, flex: isAuthenticated ? 'none' : 1, padding: '9px 14px', background: '#fee2e2', color: '#b91c1c' }}>🗑️</button>
-                      )}
-                    </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
           )}
 
-          {/* PAGINATION */}
           {pagination.totalPages > 1 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '40px', flexWrap: 'wrap' }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
