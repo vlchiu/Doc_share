@@ -15,6 +15,11 @@ import Trash from './pages/Trash';
 import UserProfile from './pages/UserProfile';
 import DownloadHistory from './pages/DownloadHistory';
 import GoogleAuthSuccess from './pages/GoogleAuthSuccess';
+import VerifyEmail from './pages/VerifyEmail';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import VIPUpgrade from './pages/VIPUpgrade';
+import PaymentResult from './pages/PaymentResult';
 import axiosClient from './api/axiosClient';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationBell from './components/NotificationBell';
@@ -92,6 +97,9 @@ function App() {
                       <LinkWithCloseMenu to="/my-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📁 Tài liệu của tôi</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/saved-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>🔖 Tài liệu đã lưu</LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/download-history" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📥 Lịch sử tải xuống</LinkWithCloseMenu>
+                      <LinkWithCloseMenu to="/vip" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#7c3aed', fontWeight: 'bold', background: user?.plan === 'VIP' ? '#faf5ff' : 'transparent' }}>
+                        {user?.plan === 'VIP' ? '💎 Tài khoản VIP' : '⚡ Nâng cấp VIP'}
+                      </LinkWithCloseMenu>
                       <LinkWithCloseMenu to="/trash" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#64748b', fontWeight: '500' }}>🗑️ Thùng rác</LinkWithCloseMenu>
                       {user.role === 'ADMIN' && (
                         <LinkWithCloseMenu to="/admin" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#b91c1c', fontWeight: 'bold', background: '#fee2e2' }}>🛡️ Trang Quản Trị</LinkWithCloseMenu>
@@ -150,6 +158,11 @@ function App() {
             <Route path="/trash" element={<ProtectedRoute user={user}><Trash /></ProtectedRoute>} />
             <Route path="/download-history" element={<ProtectedRoute user={user}><DownloadHistory /></ProtectedRoute>} />
             <Route path="/auth/google/success" element={<GoogleAuthSuccess />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/vip" element={<ProtectedRoute user={user}><VIPUpgrade /></ProtectedRoute>} />
+            <Route path="/payment/result" element={<PaymentResult />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>

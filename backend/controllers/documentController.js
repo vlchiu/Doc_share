@@ -369,7 +369,7 @@ const getTrashDocuments = async (req, res) => {
   }
 };
 
-// [POST] Tăng lượt tải xuống + lưu lịch sử
+// [POST] Tăng lượt tải xuống + lưu lịch sử + kiểm tra giới hạn
 const incrementDownload = async (req, res) => {
   try {
     const { id } = req.params;
@@ -379,15 +379,56 @@ const incrementDownload = async (req, res) => {
     const doc = await prisma.document.findUnique({ where: { id: docId }, select: { id: true } });
     if (!doc) return res.status(404).json({ message: "Không tìm thấy tài liệu" });
 
+    // Lấy thông tin user để kiểm tra plan và giới hạn
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true, plan_expires_at: true, monthly_downloads: true, download_reset_at: true }
+    });
+
+    // Kiểm tra VIP còn hạn không, nếu hết hạn thì hạ về FREE
+    const now = new Date();
+    let currentPlan = user.plan;
+    if (currentPlan === 'VIP' && user.plan_expires_at && user.plan_expires_at < now) {
+      await prisma.user.update({ where: { id: userId }, data: { plan: 'FREE' } });
+      currentPlan = 'FREE';
+    }
+
+    // Reset lượt tải nếu sang tháng mới
+    const resetAt = user.download_reset_at;
+    const isNewMonth = !resetAt || resetAt.getMonth() !== now.getMonth() || resetAt.getFullYear() !== now.getFullYear();
+    let monthlyDownloads = isNewMonth ? 0 : user.monthly_downloads;
+
+    if (isNewMonth) {
+      await prisma.user.update({ where: { id: userId }, data: { monthly_downloads: 0, download_reset_at: now } });
+    }
+
+    // Kiểm tra giới hạn với tài khoản FREE
+    const FREE_LIMIT = parseInt(process.env.FREE_DOWNLOAD_LIMIT) || 10;
+    if (currentPlan === 'FREE' && monthlyDownloads >= FREE_LIMIT) {
+      return res.status(403).json({
+        message: `Bạn đã đạt giới hạn ${FREE_LIMIT} lượt tải/tháng. Nâng cấp VIP để tải không giới hạn!`,
+        limitReached: true,
+        currentDownloads: monthlyDownloads,
+        limit: FREE_LIMIT
+      });
+    }
+
     const [updatedDoc] = await Promise.all([
       prisma.document.update({
         where: { id: docId },
         data: { download_count: { increment: 1 } },
       }),
-      prisma.downloadHistory.create({ data: { user_id: userId, document_id: docId } })
+      prisma.downloadHistory.create({ data: { user_id: userId, document_id: docId } }),
+      prisma.user.update({ where: { id: userId }, data: { monthly_downloads: { increment: 1 } } })
     ]);
 
-    res.json({ message: "Đã tăng lượt tải", download_count: updatedDoc.download_count });
+    res.json({
+      message: "Đã tăng lượt tải",
+      download_count: updatedDoc.download_count,
+      monthlyDownloads: monthlyDownloads + 1,
+      limit: currentPlan === 'VIP' ? null : FREE_LIMIT,
+      plan: currentPlan
+    });
   } catch (error) {
     res.status(500).json({ message: "Lỗi hệ thống" });
   }

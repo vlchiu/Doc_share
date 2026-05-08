@@ -1,8 +1,10 @@
 const prisma = require('../db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { sendVerifyEmail, sendResetPasswordEmail } = require('../utils/emailService');
 
-// [POST] ĐĂNG KÝ
+// [POST] ĐĂNG KÝ — Bước 1: validate + gửi OTP, chưa tạo user
 const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -12,26 +14,161 @@ const register = async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Email không hợp lệ" });
     if (!password || password.length < 6) return res.status(400).json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
 
-    // 1. Kiểm tra email đã tồn tại chưa
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    if (existingUser && existingUser.is_email_verified) {
       return res.status(400).json({ message: "Email này đã được sử dụng!" });
     }
 
-    // 2. Mã hóa mật khẩu
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 3. Lưu vào Database
-    const newUser = await prisma.user.create({
+    // Tạo OTP 6 số
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+
+    if (existingUser && !existingUser.is_email_verified) {
+      // Cập nhật lại nếu đã đăng ký nhưng chưa verify
+      await prisma.user.update({
+        where: { email },
+        data: {
+          name: name.trim(),
+          password: hashedPassword,
+          email_verify_token: otp,
+          email_verify_expires: otpExpires,
+        }
+      });
+    } else {
+      // Tạo user mới, chưa verified
+      await prisma.user.create({
+        data: {
+          name: name.trim(),
+          email,
+          password: hashedPassword,
+          email_verify_token: otp,
+          email_verify_expires: otpExpires,
+          is_email_verified: false,
+        },
+      });
+    }
+
+    await sendVerifyEmail(email, name.trim(), otp);
+
+    res.status(200).json({
+      message: "Mã xác thực đã được gửi về email. Vui lòng kiểm tra hộp thư.",
+      email // trả về để frontend dùng ở bước nhập OTP
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// [POST] ĐĂNG KÝ — Bước 2: xác thực OTP → kích hoạt tài khoản
+const verifyEmail = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ message: "Thiếu thông tin" });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản" });
+    if (user.is_email_verified) return res.status(400).json({ message: "Email đã được xác thực" });
+
+    if (user.email_verify_token !== otp) {
+      return res.status(400).json({ message: "Mã OTP không đúng" });
+    }
+    if (!user.email_verify_expires || user.email_verify_expires < new Date()) {
+      return res.status(400).json({ message: "Mã OTP đã hết hạn. Vui lòng đăng ký lại." });
+    }
+
+    await prisma.user.update({
+      where: { email },
       data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
+        is_email_verified: true,
+        email_verify_token: null,
+        email_verify_expires: null,
+      }
     });
 
-    res.status(201).json({ message: "Đăng ký thành công!", userId: newUser.id });
+    res.json({ message: "Xác thực thành công! Bạn có thể đăng nhập." });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// [POST] Gửi lại OTP xác thực
+const resendVerifyEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(404).json({ message: "Email không tồn tại" });
+    if (user.is_email_verified) return res.status(400).json({ message: "Email đã được xác thực" });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { email_verify_token: otp, email_verify_expires: otpExpires }
+    });
+
+    await sendVerifyEmail(email, user.name, otp);
+    res.json({ message: "Đã gửi lại mã OTP!" });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// [POST] Quên mật khẩu — gửi link reset
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Vui lòng nhập email" });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    // Luôn trả về thành công để tránh lộ thông tin email tồn tại
+    if (!user || user.google_id) {
+      return res.json({ message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu." });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1h
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { reset_token: resetToken, reset_token_expires: resetExpires }
+    });
+
+    await sendResetPasswordEmail(email, user.name, resetToken);
+    res.json({ message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu." });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// [POST] Đặt lại mật khẩu
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ message: "Thiếu thông tin" });
+    if (newPassword.length < 6) return res.status(400).json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
+
+    const user = await prisma.user.findFirst({
+      where: {
+        reset_token: token,
+        reset_token_expires: { gt: new Date() },
+      }
+    });
+
+    if (!user) return res.status(400).json({ message: "Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn" });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed, reset_token: null, reset_token_expires: null }
+    });
+
+    res.json({ message: "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập." });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
@@ -42,28 +179,33 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // 1. Tìm user theo email
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(400).json({ message: "Email hoặc mật khẩu không đúng!" });
 
-    // 2. Kiểm tra tài khoản có bị khóa không
     if (!user.is_active) return res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin." });
 
-    // 3. Kiểm tra mật khẩu
+    // Kiểm tra email đã xác thực chưa (bỏ qua với tài khoản Google)
+    if (!user.google_id && !user.is_email_verified) {
+      return res.status(403).json({
+        message: "Email chưa được xác thực. Vui lòng kiểm tra hộp thư và xác thực email.",
+        needVerify: true,
+        email: user.email
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Email hoặc mật khẩu không đúng!" });
 
-    // 3. Tạo Token (JWT)
     const token = jwt.sign(
-      { userId: user.id, role: user.role }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '7d' } // Token có hạn 7 ngày
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
     );
 
-    res.status(200).json({ 
-      message: "Đăng nhập thành công!", 
+    res.status(200).json({
+      message: "Đăng nhập thành công!",
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan }
     });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
@@ -148,4 +290,4 @@ const adminResetPassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, updateProfile, changePassword, adminResetPassword };
+module.exports = { register, login, getMe, updateProfile, changePassword, adminResetPassword, verifyEmail, resendVerifyEmail, forgotPassword, resetPassword };

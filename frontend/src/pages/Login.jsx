@@ -7,10 +7,13 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [needVerify, setNeedVerify] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setNeedVerify(false);
     try {
       const res = await axiosClient.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.token);
@@ -18,8 +21,22 @@ function Login() {
       toast.success('Đăng nhập thành công!');
       setTimeout(() => { window.location.href = '/'; }, 800);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Sai thông tin đăng nhập!');
+      if (error.response?.data?.needVerify) {
+        setNeedVerify(true);
+      } else {
+        toast.error(error.response?.data?.message || 'Sai thông tin đăng nhập!');
+      }
     } finally { setLoading(false); }
+  };
+
+  const handleResendVerify = async () => {
+    setResendLoading(true);
+    try {
+      await axiosClient.post('/auth/resend-verify', { email });
+      toast.success('Đã gửi lại email xác thực!');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi gửi email');
+    } finally { setResendLoading(false); }
   };
 
   return (
@@ -91,6 +108,28 @@ function Login() {
               {loading ? 'Đang đăng nhập...' : 'Đăng nhập →'}
             </button>
           </form>
+
+          {/* Thông báo chưa xác thực email */}
+          {needVerify && (
+            <div style={{ marginTop: '16px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '10px', padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 8px', color: '#92400e', fontWeight: 'bold', fontSize: '14px' }}>
+                ⚠️ Email chưa được xác thực
+              </p>
+              <p style={{ margin: '0 0 10px', color: '#78350f', fontSize: '13px' }}>
+                Vui lòng kiểm tra hộp thư <strong>{email}</strong> và nhấn link xác thực.
+              </p>
+              <button onClick={handleResendVerify} disabled={resendLoading}
+                style={{ padding: '7px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>
+                {resendLoading ? 'Đang gửi...' : '📧 Gửi lại email xác thực'}
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <Link to="/forgot-password" style={{ color: '#3b82f6', fontSize: '13px', textDecoration: 'none', fontWeight: '500' }}>
+              Quên mật khẩu?
+            </Link>
+          </div>
 
           <p style={{ textAlign: 'center', marginTop: '24px', color: '#64748b', fontSize: '14px' }}>
             Chưa có tài khoản?{' '}

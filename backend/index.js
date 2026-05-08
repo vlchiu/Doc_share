@@ -11,6 +11,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const followRoutes = require('./routes/followRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 // Khởi tạo Google Strategy SAU khi dotenv đã load
 require('./controllers/googleAuthController');
@@ -31,6 +32,12 @@ app.use(compression());
 app.use(express.json());
 app.use(passport.initialize());
 
+// Bỏ qua trang cảnh báo ngrok cho tất cả request
+app.use((req, res, next) => {
+  res.setHeader('ngrok-skip-browser-warning', 'true');
+  next();
+});
+
 app.use('/uploads', express.static('uploads'));
 
 app.get('/api/test', (req, res) => {
@@ -44,6 +51,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/follow', followRoutes);
+app.use('/api/payment', paymentRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

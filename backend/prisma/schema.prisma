@@ -10,26 +10,44 @@ datasource db {
 
 // 1. Bảng Users (Người dùng)
 model User {
-  id             Int             @id @default(autoincrement())
-  name           String
-  email          String          @unique
-  password       String
-  avatar_url     String?
-  role           Role            @default(USER)
-  is_active      Boolean         @default(true)
-  google_id      String?         @unique
-  created_at     DateTime        @default(now())
+  id                   Int             @id @default(autoincrement())
+  name                 String
+  email                String          @unique
+  password             String?
+  google_id            String?         @unique
+  avatar_url           String?
+  role                 Role            @default(USER)
+  is_active            Boolean         @default(true)
+  // Email verification
+  is_email_verified    Boolean         @default(false)
+  email_verify_token   String?
+  email_verify_expires DateTime?
+  // Password reset
+  reset_token          String?
+  reset_token_expires  DateTime?
+  // VIP
+  plan                 Plan            @default(FREE)
+  plan_expires_at      DateTime?
+  // Download limit (reset hàng tháng)
+  monthly_downloads    Int             @default(0)
+  download_reset_at    DateTime?
+  created_at           DateTime        @default(now())
   
-  // Quan hệ: 1 User có nhiều tài liệu, bình luận và tài liệu đã lưu
-  documents      Document[]      
-  comments       Comment[]       
-  saved_docs     SavedDocument[] 
-  notifications  Notification[]
-  ratings        Rating[]
-  reports        Report[]
-  download_history DownloadHistory[]
-  following      Follow[]        @relation("following")
-  followers      Follow[]        @relation("followers")
+  documents            Document[]      
+  comments             Comment[]       
+  saved_docs           SavedDocument[] 
+  notifications        Notification[]
+  ratings              Rating[]
+  reports              Report[]
+  download_history     DownloadHistory[]
+  following            Follow[]        @relation("following")
+  followers            Follow[]        @relation("followers")
+  payments             Payment[]
+}
+
+enum Plan {
+  FREE
+  VIP
 }
 
 enum Role {
@@ -172,4 +190,20 @@ model Follow {
   created_at   DateTime @default(now())
 
   @@id([follower_id, following_id])
+}
+
+// 11. Bảng Payment (Lịch sử thanh toán)
+model Payment {
+  id              Int      @id @default(autoincrement())
+  order_id        String   @unique  // mã đơn hàng gửi lên cổng TT
+  amount          Int                // số tiền (VND)
+  plan_months     Int                // số tháng VIP
+  status          String   @default("PENDING") // PENDING | SUCCESS | FAILED
+  provider        String             // MOMO | VNPAY
+  provider_ref    String?            // mã giao dịch từ cổng TT
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  user_id         Int
+  user            User     @relation(fields: [user_id], references: [id])
 }
