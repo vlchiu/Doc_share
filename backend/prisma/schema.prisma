@@ -1,48 +1,158 @@
-// Khai báo client
 generator client {
   provider = "prisma-client-js"
 }
 
-// Khai báo kết nối database
 datasource db {
   provider = "postgresql"
 }
 
-// 1. Bảng Users (Người dùng)
 model User {
-  id                   Int             @id @default(autoincrement())
+  id                   Int               @id @default(autoincrement())
   name                 String
-  email                String          @unique
+  email                String            @unique
   password             String?
-  google_id            String?         @unique
   avatar_url           String?
-  role                 Role            @default(USER)
-  is_active            Boolean         @default(true)
-  // Email verification
-  is_email_verified    Boolean         @default(false)
-  email_verify_token   String?
+  role                 Role              @default(USER)
+  created_at           DateTime          @default(now())
+  is_active            Boolean           @default(true)
+  google_id            String?           @unique
+  download_reset_at    DateTime?
   email_verify_expires DateTime?
-  // Password reset
+  email_verify_token   String?
+  is_email_verified    Boolean           @default(false)
+  monthly_downloads    Int               @default(0)
+  plan                 Plan              @default(FREE)
+  plan_expires_at      DateTime?
   reset_token          String?
   reset_token_expires  DateTime?
-  // VIP
-  plan                 Plan            @default(FREE)
-  plan_expires_at      DateTime?
-  // Download limit (reset hàng tháng)
-  monthly_downloads    Int             @default(0)
-  download_reset_at    DateTime?
-  created_at           DateTime        @default(now())
-  
-  documents            Document[]      
-  comments             Comment[]       
-  saved_docs           SavedDocument[] 
+  comments             Comment[]
+  documents            Document[]
+  download_history     DownloadHistory[]
+  following            Follow[]          @relation("following")
+  followers            Follow[]          @relation("followers")
   notifications        Notification[]
+  payments             Payment[]
   ratings              Rating[]
   reports              Report[]
-  download_history     DownloadHistory[]
-  following            Follow[]        @relation("following")
-  followers            Follow[]        @relation("followers")
-  payments             Payment[]
+  saved_docs           SavedDocument[]
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  documents   Document[]
+}
+
+model Document {
+  id               Int               @id @default(autoincrement())
+  title            String
+  description      String?
+  file_url         String
+  file_type        String
+  view_count       Int               @default(0)
+  download_count   Int               @default(0)
+  status           Status            @default(PENDING)
+  created_at       DateTime          @default(now())
+  user_id          Int
+  category_id      Int
+  doc_type         String            @default("Chung")
+  reject_reason    String?
+  deleted_at       DateTime?
+  comments         Comment[]
+  category         Category          @relation(fields: [category_id], references: [id])
+  user             User              @relation(fields: [user_id], references: [id])
+  download_history DownloadHistory[]
+  ratings          Rating[]
+  reports          Report[]
+  saved_by         SavedDocument[]
+}
+
+model Comment {
+  id          Int      @id @default(autoincrement())
+  content     String
+  created_at  DateTime @default(now())
+  user_id     Int
+  document_id Int
+  document    Document @relation(fields: [document_id], references: [id])
+  user        User     @relation(fields: [user_id], references: [id])
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  content    String
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+  user_id    Int
+  link       String?
+  user       User     @relation(fields: [user_id], references: [id])
+}
+
+model SavedDocument {
+  user_id     Int
+  document_id Int
+  saved_at    DateTime @default(now())
+  document    Document @relation(fields: [document_id], references: [id])
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@id([user_id, document_id])
+}
+
+model Rating {
+  user_id     Int
+  document_id Int
+  score       Int
+  created_at  DateTime @default(now())
+  document    Document @relation(fields: [document_id], references: [id])
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@id([user_id, document_id])
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  reason      String
+  status      String   @default("PENDING")
+  created_at  DateTime @default(now())
+  user_id     Int
+  document_id Int
+  action      String?
+  admin_note  String?
+  document    Document @relation(fields: [document_id], references: [id])
+  user        User     @relation(fields: [user_id], references: [id])
+}
+
+model DownloadHistory {
+  id          Int      @id @default(autoincrement())
+  created_at  DateTime @default(now())
+  user_id     Int
+  document_id Int
+  document    Document @relation(fields: [document_id], references: [id])
+  user        User     @relation(fields: [user_id], references: [id])
+}
+
+model Follow {
+  follower_id  Int
+  following_id Int
+  created_at   DateTime @default(now())
+  follower     User     @relation("following", fields: [follower_id], references: [id])
+  following    User     @relation("followers", fields: [following_id], references: [id])
+
+  @@id([follower_id, following_id])
+}
+
+model Payment {
+  id           Int      @id @default(autoincrement())
+  order_id     String   @unique
+  amount       Int
+  plan_months  Int
+  status       String   @default("PENDING")
+  provider     String
+  provider_ref String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  user_id      Int
+  user         User     @relation(fields: [user_id], references: [id])
 }
 
 enum Plan {
@@ -55,155 +165,8 @@ enum Role {
   ADMIN
 }
 
-// 2. Bảng Categories (Danh mục)
-model Category {
-  id          Int        @id @default(autoincrement())
-  name        String
-  description String?
-  documents   Document[] 
-}
-
-// 3. Bảng Documents (Tài liệu)
-model Document {
-  id             Int             @id @default(autoincrement())
-  title          String
-  description    String?
-  file_url       String
-  file_type      String
-  doc_type       String          @default("Chung") // THÊM DÒNG NÀY (Hardware, Software,...)
-  view_count     Int             @default(0)
-  download_count Int             @default(0)
-  status         Status          @default(PENDING)
-  reject_reason  String?
-  deleted_at     DateTime?
-  created_at     DateTime        @default(now())
-
-  // Khóa ngoại trỏ về User
-  user_id        Int
-  user           User            @relation(fields: [user_id], references: [id])
-  
-  // Khóa ngoại trỏ về Category
-  category_id    Int
-  category       Category        @relation(fields: [category_id], references: [id])
-
-  comments       Comment[]
-  saved_by       SavedDocument[]
-  ratings        Rating[]
-  reports        Report[]
-  download_history DownloadHistory[]
-}
-
 enum Status {
   PENDING
   APPROVED
   REJECTED
-}
-
-// 4. Bảng Comments (Bình luận)
-model Comment {
-  id          Int      @id @default(autoincrement())
-  content     String
-  created_at  DateTime @default(now())
-
-  user_id     Int
-  user        User     @relation(fields: [user_id], references: [id])
-  
-  document_id Int
-  document    Document @relation(fields: [document_id], references: [id])
-}
-
-// 6. Bảng Notifications
-model Notification {
-  id          Int      @id @default(autoincrement())
-  content     String
-  link        String?
-  is_read     Boolean  @default(false)
-  created_at  DateTime @default(now())
-
-  user_id     Int
-  user        User     @relation(fields: [user_id], references: [id])
-}
-
-model SavedDocument {
-  user_id     Int
-  user        User     @relation(fields: [user_id], references: [id])
-  
-  document_id Int
-  document    Document @relation(fields: [document_id], references: [id])
-  
-  saved_at    DateTime @default(now())
-
-  // Khóa chính kết hợp từ user_id và document_id
-  @@id([user_id, document_id]) 
-}
-
-// 7. Bảng Rating (Đánh giá tài liệu)
-model Rating {
-  user_id     Int
-  user        User     @relation(fields: [user_id], references: [id])
-
-  document_id Int
-  document    Document @relation(fields: [document_id], references: [id])
-
-  score       Int      // 1-5
-  created_at  DateTime @default(now())
-
-  @@id([user_id, document_id])
-}
-
-// 8. Bảng Report (Báo cáo vi phạm)
-model Report {
-  id          Int      @id @default(autoincrement())
-  reason      String
-  status      String   @default("PENDING") // PENDING | RESOLVED
-  action      String?  // Biện pháp xử lý: WARN | REMOVE | IGNORE
-  admin_note  String?  // Ghi chú của admin
-  created_at  DateTime @default(now())
-
-  user_id     Int
-  user        User     @relation(fields: [user_id], references: [id])
-
-  document_id Int
-  document    Document @relation(fields: [document_id], references: [id])
-}
-
-// 9. Lịch sử tải xuống
-model DownloadHistory {
-  id          Int      @id @default(autoincrement())
-  created_at  DateTime @default(now())
-
-  user_id     Int
-  user        User     @relation(fields: [user_id], references: [id])
-
-  document_id Int
-  document    Document @relation(fields: [document_id], references: [id])
-}
-
-// 10. Follow (Theo dõi người dùng)
-model Follow {
-  follower_id  Int
-  follower     User @relation("following", fields: [follower_id], references: [id])
-
-  following_id Int
-  following    User @relation("followers", fields: [following_id], references: [id])
-
-  created_at   DateTime @default(now())
-
-  @@id([follower_id, following_id])
-}
-
-// 11. Bảng Payment (Lịch sử thanh toán)
-model Payment {
-  id              Int      @id @default(autoincrement())
-  order_id        String   @unique  // mã đơn hàng gửi lên cổng TT
-  amount          Int                // số tiền (VND)
-  plan_months     Int                // số tháng VIP
-  status          String   @default("PENDING") // PENDING | SUCCESS | FAILED
-  provider        String             // MOMO | VNPAY
-  provider_ref    String?            // mã giao dịch từ cổng TT
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  user_id         Int
-  user            User     @relation(fields: [user_id], references: [id])
 }

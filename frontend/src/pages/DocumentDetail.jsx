@@ -87,7 +87,14 @@ function DocumentDetail() {
       window.URL.revokeObjectURL(url);
       setDoc(d => ({ ...d, download_count: d.download_count + 1 }));
       toast.success('Đang tải xuống...');
-    } catch { toast.error('Lỗi khi tải file!'); }
+    } catch (err) {
+      if (err.response?.data?.limitReached) {
+        toast.error('Đã đạt giới hạn tải tháng này, vui lòng nâng cấp tài khoản VIP để tiếp tục', { duration: 4000 });
+        setTimeout(() => { window.location.href = '/vip'; }, 2000);
+      } else {
+        toast.error('Lỗi khi tải file!');
+      }
+    }
   };
 
   const handleToggleSave = async () => {
