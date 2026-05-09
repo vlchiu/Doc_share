@@ -51,11 +51,14 @@ const register = async (req, res) => {
       });
     }
 
-    await sendVerifyEmail(email, name.trim(), otp);
+    // Gửi email background — không block response
+    sendVerifyEmail(email, name.trim(), otp).catch(err =>
+      console.error('Send OTP email error:', err.message)
+    );
 
     res.status(200).json({
       message: "Mã xác thực đã được gửi về email. Vui lòng kiểm tra hộp thư.",
-      email // trả về để frontend dùng ở bước nhập OTP
+      email
     });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
@@ -110,7 +113,9 @@ const resendVerifyEmail = async (req, res) => {
       data: { email_verify_token: otp, email_verify_expires: otpExpires }
     });
 
-    await sendVerifyEmail(email, user.name, otp);
+    sendVerifyEmail(email, user.name, otp).catch(err =>
+      console.error('Resend OTP error:', err.message)
+    );
     res.json({ message: "Đã gửi lại mã OTP!" });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
@@ -137,7 +142,9 @@ const forgotPassword = async (req, res) => {
       data: { reset_token: resetToken, reset_token_expires: resetExpires }
     });
 
-    await sendResetPasswordEmail(email, user.name, resetToken);
+    sendResetPasswordEmail(email, user.name, resetToken).catch(err =>
+      console.error('Send reset email error:', err.message)
+    );
     res.json({ message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu." });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
