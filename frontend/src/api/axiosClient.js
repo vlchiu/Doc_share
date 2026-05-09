@@ -3,7 +3,7 @@ import axios from 'axios';
 const axiosClient = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000, // 15 giây
+  timeout: 60000, // 60 giây — chờ Render wake up
 });
 
 axiosClient.interceptors.request.use(
