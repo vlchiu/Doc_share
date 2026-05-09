@@ -19,11 +19,17 @@ const googleAuthRoutes = require('./routes/googleAuthRoutes');
 
 const app = express();
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',');
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim());
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-    else callback(new Error('Not allowed by CORS'));
+    else {
+      console.log('CORS blocked:', origin, '| Allowed:', allowedOrigins);
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   credentials: true
 }));
