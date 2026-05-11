@@ -78,11 +78,13 @@ function DocumentDetail() {
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để tải xuống!'); return; }
     try {
       await axiosClient.post(`/documents/${id}/download`);
-      const res = await fetch(`${API_URL}${doc.file_url}`);
+      // Hỗ trợ cả Cloudinary URL (https://...) và local URL (/uploads/...)
+      const fileUrl = doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`;
+      const res = await fetch(fileUrl);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = doc.file_url.split('/').pop();
+      a.href = url; a.download = doc.file_url.split('/').pop().split('?')[0];
       document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
       setDoc(d => ({ ...d, download_count: d.download_count + 1 }));
@@ -192,16 +194,16 @@ function DocumentDetail() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 32px', background: '#f8fafc' }}>
                   <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>📄 Xem trước: {doc.title}</span>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <a href={`${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'none', fontWeight: 'bold' }}>↗ Mở tab mới</a>
+                    <a href={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'none', fontWeight: 'bold' }}>↗ Mở tab mới</a>
                     <button onClick={() => setShowPreview(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '16px' }}>✕</button>
                   </div>
                 </div>
-                {doc.file_type === 'text/plain' ? <TextPreview url={`${API_URL}${doc.file_url}`} />
+                {doc.file_type === 'text/plain' ? <TextPreview url={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} />
                   : doc.file_type.startsWith('image/') ? (
                     <div style={{ padding: '16px 32px', textAlign: 'center', background: '#1e293b' }}>
-                      <img src={`${API_URL}${doc.file_url}`} alt={doc.title} style={{ maxWidth: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px' }} />
+                      <img src={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} alt={doc.title} style={{ maxWidth: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px' }} />
                     </div>
-                  ) : <iframe src={`${API_URL}${doc.file_url}`} title={doc.title} style={{ width: '100%', height: '700px', border: 'none', display: 'block' }} />}
+                  ) : <iframe src={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} title={doc.title} style={{ width: '100%', height: '700px', border: 'none', display: 'block' }} />}
               </div>
             )}
 

@@ -23,8 +23,8 @@ const uploadDocument = async (req, res) => {
       data: {
         title: title.trim(),
         description: description?.trim() || null,
-        file_url: `/uploads/${file.filename}`,
-        file_type: file.mimetype,
+        file_url: req.file.path,        // Cloudinary URL
+        file_type: req.file.mimetype,
         category_id: parseInt(category_id),
         user_id: userId,
         doc_type: validDocType
@@ -329,8 +329,18 @@ const permanentDeleteDocument = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền xóa tài liệu này" });
     }
 
-    // Xóa file vật lý
-    if (doc.file_url) {
+    // Xóa file trên Cloudinary nếu là URL Cloudinary
+    if (doc.file_url && doc.file_url.includes('cloudinary.com')) {
+      try {
+        const { cloudinary } = require('../middleware/uploadMiddleware');
+        const urlParts = doc.file_url.split('/');
+        const publicIdWithExt = urlParts.slice(urlParts.indexOf('docshare')).join('/');
+        const publicId = publicIdWithExt.replace(/\.[^/.]+$/, '');
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+      } catch (e) { console.error('Cloudinary delete error:', e.message); }
+    } else if (doc.file_url) {
+      // Xóa file local cũ
       const filePath = path.join(__dirname, '..', doc.file_url);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
