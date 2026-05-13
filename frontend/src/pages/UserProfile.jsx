@@ -18,6 +18,11 @@ function UserProfile() {
   const currentUserId = parseInt(localStorage.getItem('userId') || '0');
 
   useEffect(() => {
+    // Reset state khi chuyển sang user khác
+    setLoading(true);
+    setData(null);
+    setFollowStatus({ followers: 0, following: 0, isFollowing: false });
+
     Promise.all([
       axiosClient.get(`/documents/user/${userId}`),
       axiosClient.get(`/follow/${userId}/status`),

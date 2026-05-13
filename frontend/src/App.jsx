@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -24,30 +24,43 @@ import axiosClient from './api/axiosClient';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationBell from './components/NotificationBell';
 
-// component để theo dõi URL và đóng menu khi chuyển trang
-function LinkWithCloseMenu({ to, onClick, style, children }) {
+const NAV_TYPES = [
+  { to: '/', label: 'Tất cả' },
+  { to: '/?type=Chung', label: 'Chung' },
+  { to: '/?type=Hardware', label: 'Hardware' },
+  { to: '/?type=Software', label: 'Software' },
+  { to: '/?type=Thông báo', label: 'Thông báo' },
+];
+
+function NavLink({ to, label }) {
+  const location = useLocation();
+  const search = new URLSearchParams(location.search).get('type') || '';
+  const isActive =
+    (to === '/' && location.pathname === '/' && !search) ||
+    (to !== '/' && location.pathname + location.search === to);
+
   return (
-    <Link to={to} onClick={onClick} style={style}>
-      {children}
+    <Link
+      to={to}
+      className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-150 ${
+        isActive
+          ? 'bg-blue-600 text-white shadow-sm'
+          : 'text-slate-600 hover:bg-blue-50 hover:text-blue-600'
+      }`}
+    >
+      {label}
     </Link>
   );
 }
 
-function App() {
-  const [user, setUser] = useState(null);
+function AppLayout({ user, setUser }) {
   const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef(null);
   const isAuthenticated = !!localStorage.getItem('token');
 
   useEffect(() => {
-    if (isAuthenticated) {
-      axiosClient.get('/auth/me').then(res => setUser(res.data)).catch(() => localStorage.removeItem('token'));
-    }
-  }, [isAuthenticated]);
-
-  // Đóng menu khi click ra ngoài
-  useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest('#user-menu')) setShowMenu(false);
+      if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -60,113 +73,167 @@ function App() {
   };
 
   return (
-    <Router>
-      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { borderRadius: '10px', fontWeight: '500' } }} />
-      <div style={{ fontFamily: 'Inter, sans-serif', background: 'linear-gradient(180deg, #f0f7ff 0%, #f8fafc 300px)', minHeight: '100vh', color: '#333' }}>
-        
-        {/* TẦNG 1 */}
-        <nav style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)', padding: '0 30px', height: '65px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1000, position: 'relative', boxShadow: '0 2px 20px rgba(30,58,138,0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Link to="/" style={{ textDecoration: 'none', color: '#fff', fontSize: '22px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '8px', padding: '4px 8px', fontSize: '20px' }}>📚</span>
-              <span><span style={{ color: '#93c5fd' }}>Doc</span>Share</span>
-            </Link>
-          </div>
+    <div className="min-h-screen bg-slate-50 font-sans">
+      {/* TOP NAVBAR */}
+      <header className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 shadow-lg sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          {/* LOGO */}
+          <Link to="/" className="flex items-center gap-2 text-white no-underline shrink-0">
+            <span className="bg-white/15 rounded-lg px-2 py-1 text-xl">📚</span>
+            <span className="text-xl font-bold tracking-tight">
+              <span className="text-blue-300">Doc</span>Share
+            </span>
+          </Link>
 
-          <div>
+          {/* RIGHT SIDE */}
+          <div className="flex items-center gap-3">
             {isAuthenticated && user ? (
-              <div style={{ position: 'relative' }} id="user-menu">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <NotificationBell />
-                  <div onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '5px 10px', borderRadius: '30px', background: 'rgba(255,255,255,0.1)' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 'bold', fontSize: '16px', border: '2px solid rgba(255,255,255,0.3)' }}>
+              <div className="flex items-center gap-2" ref={menuRef}>
+                <NotificationBell />
+
+                {/* UPLOAD BUTTON */}
+                <Link
+                  to="/upload"
+                  className="hidden sm:flex items-center gap-1.5 bg-white text-blue-700 font-bold text-sm px-4 py-2 rounded-full shadow hover:bg-blue-50 transition no-underline"
+                >
+                  <span>📤</span> Tải lên
+                </Link>
+
+                {/* AVATAR DROPDOWN */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full px-3 py-1.5 transition cursor-pointer border-0"
+                  >
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-white/20 flex items-center justify-center text-white font-bold text-sm border-2 border-white/30 shrink-0">
                       {user.avatar_url
-                        ? <img src={user.avatar_url.startsWith('http') ? user.avatar_url : `${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ? <img src={user.avatar_url.startsWith('http') ? user.avatar_url : `${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" className="w-full h-full object-cover" />
                         : user.name.charAt(0).toUpperCase()}
                     </div>
-                    <span style={{ fontWeight: 'bold', color: '#fff' }}>{user.name}</span>
-                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>▼</span>
-                  </div>
-                </div>
+                    <span className="text-white font-semibold text-sm hidden sm:block max-w-[120px] truncate">{user.name}</span>
+                    <svg className="w-3 h-3 text-white/60" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
 
-                {showMenu && (
-                  // MENU DROPDOWN - Bo góc và đổ bóng nhẹ
-                  <div style={{ position: 'absolute', top: '50px', right: '0', width: '250px', background: '#fff', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0', overflow: 'hidden', zIndex: 1001 }}>
-                    <div style={{ padding: '10px 0' }}>
-                      <LinkWithCloseMenu to="/profile" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>⚙️ Thông tin tài khoản</LinkWithCloseMenu>
-                      <LinkWithCloseMenu to="/my-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📁 Tài liệu của tôi</LinkWithCloseMenu>
-                      <LinkWithCloseMenu to="/saved-documents" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>🔖 Tài liệu đã lưu</LinkWithCloseMenu>
-                      <LinkWithCloseMenu to="/download-history" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#333', fontWeight: '500' }}>📥 Lịch sử tải xuống</LinkWithCloseMenu>
-                      <LinkWithCloseMenu to="/vip" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#7c3aed', fontWeight: 'bold', background: user?.plan === 'VIP' ? '#faf5ff' : 'transparent' }}>
-                        {user?.plan === 'VIP' ? '💎 Tài khoản VIP' : '⚡ Nâng cấp VIP'}
-                      </LinkWithCloseMenu>
-                      <LinkWithCloseMenu to="/trash" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#64748b', fontWeight: '500' }}>🗑️ Thùng rác</LinkWithCloseMenu>
-                      {user.role === 'ADMIN' && (
-                        <LinkWithCloseMenu to="/admin" onClick={() => setShowMenu(false)} style={{ display: 'block', padding: '12px 20px', textDecoration: 'none', color: '#b91c1c', fontWeight: 'bold', background: '#fee2e2' }}>🛡️ Trang Quản Trị</LinkWithCloseMenu>
-                      )}
+                  {showMenu && (
+                    <div className="absolute right-0 top-12 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
+                      {/* User info */}
+                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                        <p className="font-bold text-slate-800 text-sm truncate">{user.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                        {user.plan === 'VIP' && (
+                          <span className="inline-block mt-1 text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">💎 VIP</span>
+                        )}
+                      </div>
+
+                      <div className="py-1">
+                        {[
+                          { to: '/profile', icon: '⚙️', label: 'Thông tin tài khoản' },
+                          { to: '/my-documents', icon: '📁', label: 'Tài liệu của tôi' },
+                          { to: '/saved-documents', icon: '🔖', label: 'Tài liệu đã lưu' },
+                          { to: '/download-history', icon: '📥', label: 'Lịch sử tải xuống' },
+                          { to: '/trash', icon: '🗑️', label: 'Thùng rác' },
+                        ].map(item => (
+                          <Link key={item.to} to={item.to} onClick={() => setShowMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 no-underline transition">
+                            <span>{item.icon}</span>{item.label}
+                          </Link>
+                        ))}
+
+                        <Link to="/vip" onClick={() => setShowMenu(false)}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm font-bold no-underline transition ${user.plan === 'VIP' ? 'text-purple-700 bg-purple-50' : 'text-purple-600 hover:bg-purple-50'}`}>
+                          <span>{user.plan === 'VIP' ? '💎' : '⚡'}</span>
+                          {user.plan === 'VIP' ? 'Tài khoản VIP' : 'Nâng cấp VIP'}
+                        </Link>
+
+                        {user.role === 'ADMIN' && (
+                          <Link to="/admin" onClick={() => setShowMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 no-underline transition">
+                            <span>🛡️</span> Trang Quản Trị
+                          </Link>
+                        )}
+                      </div>
+
+                      <div className="border-t border-slate-100">
+                        <button onClick={handleLogout}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 transition bg-white border-0 cursor-pointer">
+                          <span>🚪</span> Đăng xuất
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ borderTop: '1px solid #f0f0f0' }}>
-                      <button onClick={handleLogout} style={{ width: '100%', textAlign: 'left', padding: '15px 20px', background: '#fff', border: 'none', cursor: 'pointer', color: '#e74c3c', fontWeight: 'bold' }}>🚪 Đăng xuất</button>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <Link to="/login" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.85)', fontWeight: 'bold' }}>Đăng nhập</Link>
-                <Link to="/register" style={{ textDecoration: 'none', color: '#1d4ed8', background: '#fff', fontWeight: 'bold', padding: '9px 20px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>Đăng ký</Link>
+              <div className="flex items-center gap-2">
+                <Link to="/login" className="text-white/85 font-semibold text-sm hover:text-white no-underline transition">Đăng nhập</Link>
+                <Link to="/register" className="bg-white text-blue-700 font-bold text-sm px-4 py-2 rounded-full shadow hover:bg-blue-50 transition no-underline">Đăng ký</Link>
               </div>
             )}
           </div>
-        </nav>
+        </div>
+      </header>
 
-        {/* TẦNG 2 */}
-        <div style={{ background: '#fff', padding: '0 30px', height: '50px', display: 'flex', alignItems: 'center', gap: '4px', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 999, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
-          {[
-            { to: '/', label: 'Trang chủ' },
-            { to: '/?type=Chung', label: 'Chung' },
-            { to: '/?type=Hardware', label: 'Hardware' },
-            { to: '/?type=Software', label: 'Software' },
-            { to: '/?type=Thông báo', label: 'Thông báo' },
-          ].map(item => (
-            <Link key={item.to} to={item.to} style={{ textDecoration: 'none', color: '#555', fontWeight: '600', fontSize: '14px', padding: '8px 14px', borderRadius: '8px', transition: '0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.color = '#3b82f6'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#555'; }}>
-              {item.label}
-            </Link>
+      {/* SUB NAV — TYPE FILTER */}
+      <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-16 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-1 overflow-x-auto">
+          {NAV_TYPES.map(item => (
+            <NavLink key={item.to} to={item.to} label={item.label} />
           ))}
           {isAuthenticated && (
-            <Link to="/upload" style={{ marginLeft: 'auto', textDecoration: 'none', color: '#fff', background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', fontWeight: 'bold', padding: '8px 18px', borderRadius: '20px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 10px rgba(59,130,246,0.35)' }}>
+            <Link
+              to="/upload"
+              className="sm:hidden ml-auto flex items-center gap-1 bg-blue-600 text-white font-bold text-sm px-4 py-1.5 rounded-full no-underline shrink-0"
+            >
               📤 Tải lên
             </Link>
           )}
         </div>
+      </nav>
 
-        {/* NỘI DUNG TRANG */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '30px 20px' }}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/documents/:id" element={<DocumentDetail />} />
-            <Route path="/users/:userId" element={<UserProfile />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/upload" element={<ProtectedRoute user={user}><Upload /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
-            <Route path="/my-documents" element={<ProtectedRoute user={user}><MyDocuments /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute user={user} adminOnly><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/saved-documents" element={<ProtectedRoute user={user}><SavedDocuments /></ProtectedRoute>} />
-            <Route path="/trash" element={<ProtectedRoute user={user}><Trash /></ProtectedRoute>} />
-            <Route path="/download-history" element={<ProtectedRoute user={user}><DownloadHistory /></ProtectedRoute>} />
-            <Route path="/auth/google/success" element={<GoogleAuthSuccess />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/vip" element={<ProtectedRoute user={user}><VIPUpgrade /></ProtectedRoute>} />
-            <Route path="/payment/result" element={<PaymentResult />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
-      </div>
+      {/* PAGE CONTENT */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/documents/:id" element={<DocumentDetail />} />
+          <Route path="/users/:userId" element={<UserProfile />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/upload" element={<ProtectedRoute user={user}><Upload /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
+          <Route path="/my-documents" element={<ProtectedRoute user={user}><MyDocuments /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute user={user} adminOnly><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/saved-documents" element={<ProtectedRoute user={user}><SavedDocuments /></ProtectedRoute>} />
+          <Route path="/trash" element={<ProtectedRoute user={user}><Trash /></ProtectedRoute>} />
+          <Route path="/download-history" element={<ProtectedRoute user={user}><DownloadHistory /></ProtectedRoute>} />
+          <Route path="/auth/google/success" element={<GoogleAuthSuccess />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/vip" element={<ProtectedRoute user={user}><VIPUpgrade /></ProtectedRoute>} />
+          <Route path="/payment/result" element={<PaymentResult />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  const [user, setUser] = useState(null);
+  const isAuthenticated = !!localStorage.getItem('token');
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      axiosClient.get('/auth/me').then(res => setUser(res.data)).catch(() => localStorage.removeItem('token'));
+    }
+  }, [isAuthenticated]);
+
+  return (
+    <Router>
+      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { borderRadius: '10px', fontWeight: '500' } }} />
+      <AppLayout user={user} setUser={setUser} />
     </Router>
   );
 }

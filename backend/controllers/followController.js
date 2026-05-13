@@ -40,7 +40,17 @@ const toggleFollow = async (req, res) => {
 // [GET] Kiểm tra đang follow không + số lượng
 const getFollowStatus = async (req, res) => {
   try {
-    const currentUserId = req.user?.userId;
+    // Optional auth: lấy userId từ token nếu có
+    let currentUserId = null;
+    const authHeader = req.header('Authorization');
+    if (authHeader) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const verified = jwt.verify(authHeader.replace('Bearer ', ''), process.env.JWT_SECRET);
+        currentUserId = verified.userId;
+      } catch {} // token lỗi/hết hạn → bỏ qua
+    }
+
     const targetId = parseInt(req.params.userId);
 
     const [followers, following, isFollowing] = await Promise.all([
