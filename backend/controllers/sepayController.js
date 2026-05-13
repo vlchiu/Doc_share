@@ -71,23 +71,32 @@ const createSepayPayment = async (req, res) => {
 // ─── [POST] Webhook nhận callback từ SePay ───────────────────────────────────
 const sepayWebhook = async (req, res) => {
   try {
-    // Xác minh API Key từ header
-    const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+    // Xác minh API Key — SePay gửi dạng "Authorization: Apikey <key>"
+    const authHeader = req.headers['authorization'] || '';
+    const apiKey = authHeader.replace('Apikey ', '').replace('Bearer ', '').trim();
     if (apiKey !== process.env.SEPAY_WEBHOOK_KEY) {
-      console.log('❌ SePay webhook: Invalid API Key');
+      console.log('❌ SePay webhook: Invalid API Key, received:', authHeader);
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { transferAmount, transferContent, transactionId } = req.body;
+    // SePay gửi field "content" (không phải "transferContent")
+    const { transferAmount, content, id } = req.body;
 
-    console.log('✅ SePay webhook received:', { transferAmount, transferContent, transactionId });
+    console.log('✅ SePay webhook received:', { transferAmount, content, id });
 
-    // Tìm payment theo order_id trong transferContent
-    const orderId = transferContent?.trim();
-    if (!orderId || !orderId.startsWith('SEPAY_')) {
-      console.log('⚠️ Invalid order ID format:', orderId);
-      return res.status(200).json({ message: 'ok' }); // Trả 200 để SePay không retry
+    if (!content) {
+      console.log('⚠️ No content field in webhook body');
+      return res.status(200).json({ message: 'ok' });
     }
+
+    // Tìm orderId dạng SEPAY_xxx trong chuỗi content
+    // VD: content = "129025634159-0945537569-SEPAY5177 86561185..."
+    const match = content.match(/(SEPAY_\d+_\d+)/);
+    if (!match) {
+      console.log('⚠️ No SEPAY order ID found in content:', content);
+      return res.status(200).json({ message: 'ok' });
+    }
+    const orderId = match[1];
 
     const payment = await prisma.payment.findUnique({ where: { order_id: orderId } });
     if (!payment) {
@@ -109,7 +118,7 @@ const sepayWebhook = async (req, res) => {
     // Cập nhật payment thành công
     await prisma.payment.update({
       where: { order_id: orderId },
-      data: { status: 'SUCCESS', provider_ref: String(transactionId) }
+      data: { status: 'SUCCESS', provider_ref: String(id) }
     });
 
     // Kích hoạt VIP
