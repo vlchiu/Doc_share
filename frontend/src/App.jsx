@@ -105,12 +105,27 @@ function AppLayout({ user, setUser }) {
                     onClick={() => setShowMenu(!showMenu)}
                     className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full px-3 py-1.5 transition cursor-pointer border-0"
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-white/20 flex items-center justify-center text-white font-bold text-sm border-2 border-white/30 shrink-0">
-                      {user.avatar_url
-                        ? <img src={user.avatar_url.startsWith('http') ? user.avatar_url : `${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" className="w-full h-full object-cover" />
-                        : user.name.charAt(0).toUpperCase()}
+                    {/* AVATAR + VIP BADGE */}
+                    <div className="relative shrink-0">
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-white/20 flex items-center justify-center text-white font-bold text-sm border-2 border-white/30">
+                        {user.avatar_url
+                          ? <img src={user.avatar_url.startsWith('http') ? user.avatar_url : `${import.meta.env.VITE_API_URL}${user.avatar_url}`} alt="avatar" className="w-full h-full object-cover" />
+                          : user.name.charAt(0).toUpperCase()}
+                      </div>
+                      {/* VIP BADGE — góc dưới phải avatar */}
+                      {user.plan === 'VIP' && (
+                        <span className="absolute -bottom-1 -right-1 text-xs leading-none">💎</span>
+                      )}
+                      {/* ADMIN BADGE */}
+                      {user.role === 'ADMIN' && (
+                        <span className="absolute -bottom-1 -right-1 text-xs leading-none">🛡️</span>
+                      )}
                     </div>
                     <span className="text-white font-semibold text-sm hidden sm:block max-w-[120px] truncate">{user.name}</span>
+                    {/* VIP label kế tên */}
+                    {user.plan === 'VIP' && (
+                      <span className="hidden sm:block text-xs font-bold text-yellow-300 bg-yellow-400/20 px-1.5 py-0.5 rounded-full">VIP</span>
+                    )}
                     <svg className="w-3 h-3 text-white/60" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
