@@ -89,14 +89,44 @@ const sepayWebhook = async (req, res) => {
       return res.status(200).json({ message: 'ok' });
     }
 
-    // Tìm orderId dạng SEPAY_xxx trong chuỗi content
-    // VD: content = "129025634159-0945537569-SEPAY5177 86561185..."
-    const match = content.match(/(SEPAY_\d+_\d+)/);
-    if (!match) {
-      console.log('⚠️ No SEPAY order ID found in content:', content);
-      return res.status(200).json({ message: 'ok' });
+    // Tìm orderId dạng SEPAY_userId_timestamp hoặc SEPAYuserId_timestamp trong content
+    // VD: "SEPAY_5_1778658363362" hoặc "SEPAY51778658363362"
+    const match = content.match(/SEPAY[_]?(\d+)[_](\d+)/) || content.match(/SEPAY(\d{1,10})(\d{13})/);
+    
+    let orderId = null;
+    if (match) {
+      // Thử tìm trực tiếp trong DB với các format có thể
+      const possibleIds = [
+        `SEPAY_${match[1]}_${match[2]}`,  // format chuẩn
+        match[0],                           // format gốc từ content
+      ];
+      
+      for (const id of possibleIds) {
+        const found = await prisma.payment.findUnique({ where: { order_id: id } });
+        if (found) { orderId = id; break; }
+      }
     }
-    const orderId = match[1];
+
+    if (!orderId) {
+      // Fallback: tìm tất cả payment PENDING của số tiền này trong 1 giờ qua
+      const recentPayment = await prisma.payment.findFirst({
+        where: {
+          status: 'PENDING',
+          provider: 'SEPAY',
+          amount: parseInt(transferAmount),
+          created_at: { gte: new Date(Date.now() - 60 * 60 * 1000) }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+      
+      if (recentPayment) {
+        orderId = recentPayment.order_id;
+        console.log('✅ Found payment by amount fallback:', orderId);
+      } else {
+        console.log('⚠️ No SEPAY order ID found in content:', content);
+        return res.status(200).json({ message: 'ok' });
+      }
+    }
 
     const payment = await prisma.payment.findUnique({ where: { order_id: orderId } });
     if (!payment) {
