@@ -5,6 +5,7 @@ import axiosClient from '../api/axiosClient';
 import Spinner from '../components/Spinner';
 import { openOrDownload, FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
 import StarRating from '../components/StarRating';
+import ChatBox from '../components/ChatBox';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -144,6 +145,7 @@ function DocumentDetail() {
   const badgeColor = FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9', color: '#475569' };
 
   return (
+    <>
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
       {/* BREADCRUMB */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', fontSize: '13px', color: '#94a3b8', flexWrap: 'wrap' }}>
@@ -357,6 +359,12 @@ function DocumentDetail() {
 
       </div>
     </div>
+
+    {/* CHAT BOX AI — chỉ hiện khi đã đăng nhập */}
+    {isAuthenticated && (
+      <ChatBox documentId={parseInt(id)} documentTitle={doc.title} />
+    )}
+    </>
   );
 }
 
