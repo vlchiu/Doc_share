@@ -60,7 +60,7 @@ function ChatBox({ documentId, documentTitle }) {
           <span className="text-xl">🤖</span>
           <div>
             <div className="font-bold text-sm">AI Assistant</div>
-            <div className="text-xs opacity-90 truncate max-w-[200px]">{documentTitle}</div>
+            <div className="text-xs opacity-75">Hỏi bất cứ điều gì</div>
           </div>
         </div>
         <button
@@ -75,9 +75,17 @@ function ChatBox({ documentId, documentTitle }) {
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm py-8">
-            <div className="text-4xl mb-2">💬</div>
-            <p>Hỏi AI về nội dung tài liệu này</p>
-            <p className="text-xs mt-2">Ví dụ: "Tóm tắt tài liệu", "Giải thích phần..."</p>
+            <div className="text-4xl mb-2">🤖</div>
+            <p className="font-medium text-slate-500">Xin chào! Tôi là AI Assistant</p>
+            <p className="text-xs mt-2">Hỏi tôi bất cứ điều gì, hoặc hỏi về tài liệu này</p>
+            <div className="mt-3 flex flex-col gap-1">
+              {['Tóm tắt tài liệu này', 'Giải thích nội dung chính', 'Bạn có thể làm gì?'].map(q => (
+                <button key={q} onClick={() => setInput(q)}
+                  className="text-xs text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full border-0 cursor-pointer transition">
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
