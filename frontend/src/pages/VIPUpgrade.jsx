@@ -4,7 +4,7 @@ import axiosClient from '../api/axiosClient';
 
 const PLAN_ICONS = { 1: '⚡', 3: '🔥', 12: '👑' };
 
-function VIPUpgrade() {
+function VIPUpgrade({ onVIPActivated }) {
   const [plans, setPlans]               = useState([]);
   const [loading, setLoading]           = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -33,8 +33,9 @@ function VIPUpgrade() {
           clearInterval(pollRef.current);
           toast.success('🎉 Thanh toán thành công! Tài khoản VIP đã được kích hoạt.');
           setSepayOrder(null);
-          // Reload user info
-          axiosClient.get('/auth/me').then(r => setUser(r.data));
+          // Cập nhật user state ở App.jsx để badge VIP hiện ngay
+          if (onVIPActivated) onVIPActivated();
+          setTimeout(() => window.location.reload(), 1500);
         }
       } catch {}
     }, 5000); // kiểm tra mỗi 5 giây
@@ -67,7 +68,8 @@ function VIPUpgrade() {
         clearInterval(pollRef.current);
         toast.success('🎉 Thanh toán thành công! Tài khoản VIP đã được kích hoạt.');
         setSepayOrder(null);
-        axiosClient.get('/auth/me').then(r => setUser(r.data));
+        if (onVIPActivated) onVIPActivated();
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         toast('⏳ Chưa nhận được thanh toán, vui lòng thử lại sau.', { icon: '⏳' });
       }

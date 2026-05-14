@@ -53,7 +53,7 @@ function NavLink({ to, label }) {
   );
 }
 
-function AppLayout({ user, setUser }) {
+function AppLayout({ user, setUser, refreshUser }) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
   const isAuthenticated = !!localStorage.getItem('token');
@@ -226,7 +226,7 @@ function AppLayout({ user, setUser }) {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/vip" element={<ProtectedRoute user={user}><VIPUpgrade /></ProtectedRoute>} />
+          <Route path="/vip" element={<ProtectedRoute user={user}><VIPUpgrade onVIPActivated={refreshUser} /></ProtectedRoute>} />
           <Route path="/payment/result" element={<PaymentResult />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -239,16 +239,22 @@ function App() {
   const [user, setUser] = useState(null);
   const isAuthenticated = !!localStorage.getItem('token');
 
-  useEffect(() => {
+  const fetchUser = () => {
     if (isAuthenticated) {
-      axiosClient.get('/auth/me').then(res => setUser(res.data)).catch(() => localStorage.removeItem('token'));
+      axiosClient.get('/auth/me')
+        .then(res => setUser(res.data))
+        .catch(() => localStorage.removeItem('token'));
     }
-  }, [isAuthenticated]);
+  };
+
+  useEffect(() => {
+    fetchUser();
+  }, [isAuthenticated]); // eslint-disable-line
 
   return (
     <Router>
       <Toaster position="top-right" toastOptions={{ duration: 3000, style: { borderRadius: '10px', fontWeight: '500' } }} />
-      <AppLayout user={user} setUser={setUser} />
+      <AppLayout user={user} setUser={setUser} refreshUser={fetchUser} />
     </Router>
   );
 }
