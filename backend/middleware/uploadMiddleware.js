@@ -32,11 +32,31 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
     const isImage = file.mimetype.startsWith('image/');
+    const mimeToExt = {
+      'application/pdf': 'pdf',
+      'text/plain': 'txt',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.ms-excel': 'xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/vnd.ms-powerpoint': 'ppt',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+      'application/zip': 'zip',
+      'application/x-rar-compressed': 'rar',
+      'application/xml': 'xml',
+      'text/xml': 'xml',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+    };
+    const ext = mimeToExt[file.mimetype] || 'bin';
     return {
       folder: 'docshare',
       resource_type: isImage ? 'image' : 'raw',
-      public_id: `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
-      use_filename: true,
+      type: 'upload',
+      access_mode: 'public',
+      public_id: `${Date.now()}.${ext}`,
+      use_filename: false,
       unique_filename: false,
     };
   },

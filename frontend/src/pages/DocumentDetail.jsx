@@ -21,6 +21,51 @@ function TextPreview({ url }) {
   );
 }
 
+function PDFPreview({ url, docId }) {
+  const [mode, setMode] = useState('google'); // 'google' | 'direct'
+  const API_URL = import.meta.env.VITE_API_URL;
+  const token = localStorage.getItem('token');
+  const proxyUrl = `${API_URL}/api/documents/proxy-file/${docId}?token=${token}`;
+  const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
+
+  return (
+    <div style={{ background: '#1e293b' }}>
+      {/* Toolbar */}
+      <div style={{ padding: '8px 16px', background: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setMode('google')}
+            style={{ padding: '4px 12px', background: mode === 'google' ? '#3b82f6' : '#475569', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+          >🌐 Google Viewer</button>
+          <button
+            onClick={() => setMode('proxy')}
+            style={{ padding: '4px 12px', background: mode === 'proxy' ? '#3b82f6' : '#475569', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+          >🔄 Proxy</button>
+        </div>
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: '12px', color: '#60a5fa', textDecoration: 'none' }}>↗ Mở tab mới</a>
+      </div>
+
+      {/* Viewer */}
+      {mode === 'google' ? (
+        <iframe
+          key="google"
+          src={googleViewerUrl}
+          title="PDF Preview - Google"
+          style={{ width: '100%', height: '700px', border: 'none', display: 'block' }}
+        />
+      ) : (
+        <iframe
+          key="proxy"
+          src={proxyUrl}
+          title="PDF Preview - Proxy"
+          style={{ width: '100%', height: '700px', border: 'none', display: 'block' }}
+        />
+      )}
+    </div>
+  );
+}
+
 function DocumentDetail() {
   const { id } = useParams();
   const [doc, setDoc] = useState(null);
@@ -79,15 +124,28 @@ function DocumentDetail() {
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để tải xuống!'); return; }
     try {
       await axiosClient.post(`/documents/${id}/download`);
-      // Hỗ trợ cả Cloudinary URL (https://...) và local URL (/uploads/...)
-      const fileUrl = doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`;
-      const res = await fetch(fileUrl);
+
+      const token = localStorage.getItem('token');
+      const proxyUrl = `${API_URL}/api/documents/proxy-file/${id}?token=${token}`;
+      const res = await fetch(proxyUrl);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`HTTP ${res.status}: ${errText}`);
+      }
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = doc.file_url.split('/').pop().split('?')[0];
-      document.body.appendChild(a); a.click(); a.remove();
+      const ext = doc.file_url.split('/').pop().split('?')[0].split('.').pop();
+      const safeTitle = doc.title.replace(/[\/\\:*?"<>|]/g, '_').trim();
+      a.href = url;
+      a.download = `${safeTitle}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
+
       setDoc(d => ({ ...d, download_count: d.download_count + 1 }));
       toast.success('Đang tải xuống...');
     } catch (err) {
@@ -205,7 +263,17 @@ function DocumentDetail() {
                     <div style={{ padding: '16px 32px', textAlign: 'center', background: '#1e293b' }}>
                       <img src={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} alt={doc.title} style={{ maxWidth: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px' }} />
                     </div>
-                  ) : <iframe src={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} title={doc.title} style={{ width: '100%', height: '700px', border: 'none', display: 'block' }} />}
+                  ) : doc.file_type === 'application/pdf' ? (
+                    <PDFPreview url={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} docId={doc.id} />
+                  ) : (
+                    <div style={{ padding: '32px', textAlign: 'center', background: '#1e293b', color: '#e2e8f0' }}>
+                      <p style={{ marginBottom: '12px' }}>Không thể xem trước định dạng này.</p>
+                      <a href={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: '10px 20px', background: '#3b82f6', color: '#fff', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
+                        ↗ Mở trong tab mới
+                      </a>
+                    </div>
+                  )}
               </div>
             )}
 

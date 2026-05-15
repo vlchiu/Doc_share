@@ -25,6 +25,39 @@ router.get('/trash', verifyToken, getTrashDocuments);
 router.post('/upload', verifyToken, upload.single('file'), uploadDocument);
 router.delete('/comments/:commentId', verifyToken, deleteComment);
 
+// --- PROXY: stream file từ Cloudinary về frontend (tránh CORS) ---
+router.get('/proxy-file/:id', async (req, res) => {
+  try {
+    const jwt = require('jsonwebtoken');
+    const axios = require('axios');
+    const prisma = require('../db');
+
+    // Xác thực token
+    const token = req.query.token || req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+    try { jwt.verify(token, process.env.JWT_SECRET); } catch { return res.status(401).json({ message: 'Token không hợp lệ' }); }
+
+    const doc = await prisma.document.findUnique({ where: { id: parseInt(req.params.id) } });
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const fileUrl = doc.file_url;
+
+    const response = await axios.get(fileUrl, {
+      responseType: 'stream',
+      timeout: 30000,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    res.setHeader('Content-Type', doc.file_type || 'application/octet-stream');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    response.data.pipe(res);
+  } catch (err) {
+    console.error('Proxy file error:', err.response?.status, err.message);
+    res.status(500).json({ message: 'Không thể tải file' });
+  }
+});
+
 // --- COLLECTION ROUTE ---
 router.get('/', getAllDocuments);
 
