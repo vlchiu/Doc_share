@@ -55,6 +55,7 @@ function NavLink({ to, label }) {
 
 function AppLayout({ user, setUser, refreshUser }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef(null);
   const isAuthenticated = !!localStorage.getItem('token');
 
@@ -66,6 +67,12 @@ function AppLayout({ user, setUser, refreshUser }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
@@ -75,7 +82,13 @@ function AppLayout({ user, setUser, refreshUser }) {
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       {/* TOP NAVBAR */}
-      <header className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 shadow-lg sticky top-0 z-50">
+      <header
+        className={`sticky top-0 z-50 transition-all duration-300 ${
+          scrolled
+            ? 'bg-blue-950/90 backdrop-blur-md shadow-xl'
+            : 'bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 shadow-lg'
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* LOGO */}
           <Link to="/" className="flex items-center gap-2 text-white no-underline shrink-0">
@@ -231,6 +244,63 @@ function AppLayout({ user, setUser, refreshUser }) {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+
+      {/* FOOTER */}
+      <footer className="bg-slate-900 text-slate-400 mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+            {/* Brand */}
+            <div>
+              <Link to="/" className="flex items-center gap-2 no-underline mb-3">
+                <span className="bg-white/10 rounded-lg px-2 py-1 text-lg">📚</span>
+                <span className="text-lg font-bold text-white">
+                  <span className="text-blue-400">Doc</span>Share
+                </span>
+              </Link>
+              <p className="text-sm leading-relaxed text-slate-500">
+                Nền tảng chia sẻ tài liệu nội bộ — nhanh, gọn, bảo mật.
+              </p>
+            </div>
+
+            {/* Tài liệu */}
+            <div>
+              <h4 className="text-white font-semibold text-sm mb-3">Tài liệu</h4>
+              <ul className="space-y-2 text-sm">
+                {[
+                  { to: '/', label: 'Tất cả tài liệu' },
+                  { to: '/?type=Chung', label: 'Chung' },
+                  { to: '/?type=Hardware', label: 'Hardware' },
+                  { to: '/?type=Software', label: 'Software' },
+                  { to: '/?type=Thông báo', label: 'Thông báo' },
+                ].map(item => (
+                  <li key={item.to}>
+                    <Link to={item.to} className="no-underline text-slate-500 hover:text-white transition-colors">
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Thống kê */}
+            <div>
+              <h4 className="text-white font-semibold text-sm mb-3">Về DocShare</h4>
+              <ul className="space-y-2 text-sm text-slate-500">
+                <li>📄 Chia sẻ tài liệu miễn phí</li>
+                <li>🔒 Kiểm duyệt nội dung</li>
+                <li>🤖 AI hỗ trợ tài liệu</li>
+                <li>💎 Gói VIP không giới hạn</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+            <p>© {new Date().getFullYear()} DocShare. All rights reserved.</p>
+            <p>Built with React + Node.js + Prisma</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
