@@ -1,7 +1,29 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import {
+  User,
+  Camera,
+  Calendar,
+  KeyRound,
+  BarChart3,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  Shield,
+  Save,
+  Lock
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -17,6 +39,8 @@ function Profile() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwMsg, setPwMsg] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  const [changingPw, setChangingPw] = useState(false);
 
   const getMe = async () => {
     const res = await axiosClient.get('/auth/me');
@@ -28,11 +52,19 @@ function Profile() {
     try {
       const res = await axiosClient.get('/documents/mine');
       const docs = Array.isArray(res.data) ? res.data : [];
-      const approved = docs.filter(d => d.status === 'APPROVED');
-      const pending = docs.filter(d => d.status === 'PENDING').length;
+      const approved = docs.filter((d) => d.status === 'APPROVED');
+      const pending = docs.filter((d) => d.status === 'PENDING').length;
       setDocStats({ total: docs.length, approved: approved.length, pending });
-      const sorted = [...approved].sort((a, b) => b.download_count - a.download_count).slice(0, 5);
-      setTopDocs(sorted.map(d => ({ name: d.title.length > 20 ? d.title.slice(0, 20) + '…' : d.title, tải: d.download_count, xem: d.view_count })));
+      const sorted = [...approved]
+        .sort((a, b) => b.download_count - a.download_count)
+        .slice(0, 5);
+      setTopDocs(
+        sorted.map((d) => ({
+          name: d.title.length > 18 ? d.title.slice(0, 18) + '…' : d.title,
+          tải: d.download_count,
+          xem: d.view_count,
+        }))
+      );
     } catch {}
   };
 
@@ -43,12 +75,14 @@ function Profile() {
 
   const onFileChange = (e) => {
     const file = e.target.files[0];
+    if (!file) return;
     setSelectedFile(file);
     setPreview(URL.createObjectURL(file));
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+    setUpdating(true);
     const formData = new FormData();
     formData.append('name', newName);
     if (selectedFile) formData.append('avatar', selectedFile);
@@ -58,107 +92,287 @@ function Profile() {
       window.location.reload();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Lỗi cập nhật!');
+    } finally {
+      setUpdating(false);
     }
   };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
     setPwMsg(null);
-    if (newPassword !== confirmPassword) return setPwMsg({ type: 'error', text: 'Mật khẩu xác nhận không khớp!' });
+    if (newPassword !== confirmPassword) {
+      setPwMsg({ type: 'error', text: 'Mật khẩu xác nhận không khớp!' });
+      return;
+    }
+    setChangingPw(true);
     try {
       await axiosClient.put('/auth/change-password', { currentPassword, newPassword });
-      setPwMsg({ type: 'success', text: '✅ Đổi mật khẩu thành công!' });
+      setPwMsg({ type: 'success', text: 'Đổi mật khẩu thành công!' });
       toast.success('Đổi mật khẩu thành công!');
-      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
     } catch (error) {
-      setPwMsg({ type: 'error', text: '❌ ' + (error.response?.data?.message || 'Lỗi server') });
-      toast.error(error.response?.data?.message || 'Lỗi server!');
+      setPwMsg({
+        type: 'error',
+        text: error.response?.data?.message || 'Lỗi khi đổi mật khẩu!',
+      });
+      toast.error(error.response?.data?.message || 'Lỗi khi đổi mật khẩu!');
+    } finally {
+      setChangingPw(false);
     }
   };
 
-  const inputStyle = { padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', width: '100%' };
-  const labelStyle = { fontWeight: 'bold', color: '#555', marginBottom: '5px', display: 'block' };
-
-  if (!user) return <p>Đang tải...</p>;
+  if (!user) {
+    return (
+      <div className="py-20 text-center text-slate-400 text-xs">
+        Đang tải thông tin tài khoản...
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: '620px', margin: '30px auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-      {/* THÔNG TIN CÁ NHÂN */}
-      <div style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
-        {/* Header gradient */}
-        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 60%, #06b6d4 100%)', padding: '28px 32px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-          <h2 style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: 'bold', position: 'relative' }}>⚙️ Thiết lập tài khoản</h2>
-          <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: '13px', position: 'relative' }}>Quản lý thông tin cá nhân của bạn</p>
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* ── HEADER BENTO ── */}
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white relative overflow-hidden border border-slate-800 shadow-xl flex items-center justify-between">
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-indigo-300 text-xs font-bold mb-3 border border-white/10">
+            <User className="w-3.5 h-3.5" /> Hồ sơ cá nhân
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Thiết lập tài khoản</h1>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1">
+            Quản lý định danh, bảo mật và theo dõi thống kê hiệu suất tài liệu của bạn.
+          </p>
         </div>
+      </div>
 
-        <div style={{ background: '#fff', padding: '28px 32px' }}>
-        <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-            <div style={{ position: 'relative', width: '110px', height: '110px' }}>
-              <img src={preview || (user.avatar_url ? (user.avatar_url.startsWith('http') ? user.avatar_url : `${API_URL}${user.avatar_url}`) : `https://ui-avatars.com/api/?name=${user.name}&background=random`)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '4px solid #e2e8f0' }} />
-              <label htmlFor="avatar-input" style={{ position: 'absolute', bottom: '4px', right: '4px', background: '#3b82f6', color: '#fff', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '13px' }}>📷</label>
-              <input id="avatar-input" type="file" hidden onChange={onFileChange} accept="image/*" />
+      {/* ── PROFILE INFO CARD ── */}
+      <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 sm:p-8 shadow-sm">
+        <form onSubmit={handleUpdate} className="space-y-6">
+          {/* Avatar Upload */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-xl ring-2 ring-indigo-500/30">
+                <img
+                  src={
+                    preview ||
+                    (user.avatar_url
+                      ? user.avatar_url.startsWith('http')
+                        ? user.avatar_url
+                        : `${API_URL}${user.avatar_url}`
+                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`)
+                  }
+                  alt="avatar"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <label
+                htmlFor="avatar-input"
+                className="absolute bottom-0 right-0 p-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 shadow-md cursor-pointer transition-transform hover:scale-110"
+                title="Thay đổi ảnh đại diện"
+              >
+                <Camera className="w-4 h-4" />
+              </label>
+              <input
+                id="avatar-input"
+                type="file"
+                hidden
+                onChange={onFileChange}
+                accept="image/*"
+              />
             </div>
-            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>Bấm icon camera để đổi ảnh</p>
+            <p className="text-[11px] text-slate-400">Bấm biểu tượng máy ảnh để tải ảnh mới</p>
           </div>
 
-          <div><label style={labelStyle}>Email (không thể sửa):</label><input type="text" value={user.email} disabled style={{ ...inputStyle, background: '#f8fafc', color: '#888' }} /></div>
-          <div><label style={labelStyle}>Tên hiển thị:</label><input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} style={inputStyle} /></div>
-          <div><label style={labelStyle}>Ngày tham gia:</label><p style={{ margin: 0, color: '#666' }}>📅 {new Date(user.created_at).toLocaleDateString('vi-VN')}</p></div>
+          {/* Form fields */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Địa chỉ Email
+              </label>
+              <input
+                type="text"
+                value={user.email}
+                disabled
+                className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-slate-100/80 text-slate-500 cursor-not-allowed font-medium"
+              />
+            </div>
 
-          {/* STATS */}
-          <div style={{ display: 'flex', gap: '10px' }}>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                Tên hiển thị
+              </label>
+              <input
+                type="text"
+                required
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-semibold"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-500 pt-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              <span>
+                Thành viên từ ngày:{' '}
+                <strong className="text-slate-700">
+                  {new Date(user.created_at).toLocaleDateString('vi-VN')}
+                </strong>
+              </span>
+            </div>
+          </div>
+
+          {/* METRIC PILLS */}
+          <div className="grid grid-cols-3 gap-3 pt-2">
             {[
-              { label: 'Tổng tài liệu', value: docStats.total, color: '#dbeafe', text: '#1d4ed8' },
-              { label: 'Đã duyệt', value: docStats.approved, color: '#dcfce7', text: '#15803d' },
-              { label: 'Chờ duyệt', value: docStats.pending, color: '#fef9c3', text: '#a16207' },
-            ].map(s => (
-              <div key={s.label} style={{ flex: 1, background: s.color, borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: s.text }}>{s.value}</div>
-                <div style={{ fontSize: '11px', color: s.text, marginTop: '2px' }}>{s.label}</div>
+              {
+                label: 'Tổng tài liệu',
+                value: docStats.total,
+                bg: 'bg-indigo-50/70 border-indigo-100',
+                text: 'text-indigo-600',
+              },
+              {
+                label: 'Đã phê duyệt',
+                value: docStats.approved,
+                bg: 'bg-emerald-50/70 border-emerald-100',
+                text: 'text-emerald-600',
+              },
+              {
+                label: 'Đang chờ duyệt',
+                value: docStats.pending,
+                bg: 'bg-amber-50/70 border-amber-100',
+                text: 'text-amber-600',
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className={`p-3.5 rounded-2xl border ${s.bg} text-center flex flex-col justify-center`}
+              >
+                <div className={`text-xl font-black ${s.text}`}>{s.value}</div>
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
+                  {s.label}
+                </div>
               </div>
             ))}
           </div>
 
-          <button type="submit" style={{ padding: '14px', background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px', boxShadow: '0 4px 14px rgba(16,185,129,0.35)' }}>Lưu thay đổi</button>
+          <button
+            type="submit"
+            disabled={updating}
+            className="w-full py-3 rounded-2xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 border-0 cursor-pointer"
+          >
+            <Save className="w-4 h-4" />
+            <span>{updating ? 'Đang lưu...' : 'Lưu thay đổi hồ sơ'}</span>
+          </button>
         </form>
-        </div>
       </div>
 
-      {/* BIỂU ĐỒ TÀI LIỆU */}
+      {/* ── TOP DOCS ANALYTICS (IF ANY) ── */}
       {topDocs.length > 0 && (
-        <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 'bold', color: '#1a1a1a' }}>📊 Top tài liệu của bạn</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={topDocs} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
-              <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
-              <Bar dataKey="tải" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="xem" fill="#10b981" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+              Top tài liệu thịnh hành của bạn
+            </h3>
+          </div>
+          <div className="h-56 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topDocs} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '11px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                  }}
+                />
+                <Bar dataKey="tải" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="xem" fill="#10b981" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
-      {/* ĐỔI MẬT KHẨU */}
-      <div style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
-        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%)', padding: '20px 32px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-          <h3 style={{ margin: 0, color: '#fff', fontSize: '17px', fontWeight: 'bold', position: 'relative' }}>🔒 Đổi mật khẩu</h3>
+      {/* ── PASSWORD CHANGE CARD ── */}
+      <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 sm:p-8 shadow-sm space-y-5">
+        <div className="flex items-center gap-2">
+          <Lock className="w-4 h-4 text-indigo-600" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+            Đổi mật khẩu tài khoản
+          </h3>
         </div>
-        <div style={{ background: '#fff', padding: '28px 32px' }}>
-        <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div><label style={labelStyle}>Mật khẩu hiện tại:</label><input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={inputStyle} required /></div>
-          <div><label style={labelStyle}>Mật khẩu mới:</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputStyle} required /></div>
-          <div><label style={labelStyle}>Xác nhận mật khẩu mới:</label><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={inputStyle} required /></div>
-          {pwMsg && <p style={{ margin: 0, color: pwMsg.type === 'error' ? '#ef4444' : '#10b981', fontWeight: 'bold', fontSize: '14px' }}>{pwMsg.text}</p>}
-          <button type="submit" style={{ padding: '14px', background: 'linear-gradient(135deg, #3b82f6, #7c3aed)', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px', boxShadow: '0 4px 14px rgba(59,130,246,0.35)' }}>Đổi mật khẩu</button>
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Mật khẩu hiện tại
+            </label>
+            <input
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Mật khẩu mới
+            </label>
+            <input
+              type="password"
+              required
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Xác nhận mật khẩu mới
+            </label>
+            <input
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-medium"
+            />
+          </div>
+
+          {pwMsg && (
+            <div
+              className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                pwMsg.type === 'error'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}
+            >
+              {pwMsg.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+              )}
+              <span>{pwMsg.text}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={changingPw}
+            className="w-full py-3 rounded-2xl font-bold text-xs text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 border-0 cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>{changingPw ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}</span>
+          </button>
         </form>
-        </div>
       </div>
     </div>
   );

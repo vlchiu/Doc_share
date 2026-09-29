@@ -1,9 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import {
+  Eye,
+  Download,
+  Bookmark,
+  BookmarkCheck,
+  Share2,
+  Flag,
+  Trash2,
+  ChevronRight,
+  X,
+  ExternalLink,
+  Calendar,
+  User,
+  MessageSquare,
+  Sparkles,
+  FileText,
+  ShieldAlert,
+  ArrowLeft,
+  Check,
+  Layers,
+  Send,
+  HelpCircle,
+  TrendingUp,
+  FolderOpen
+} from 'lucide-react';
+
 import axiosClient from '../api/axiosClient';
 import Spinner from '../components/Spinner';
-import { openOrDownload, FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
+import { openOrDownload, getFileLabel } from '../utils/fileHelper';
 import StarRating from '../components/StarRating';
 import ChatBox from '../components/ChatBox';
 
@@ -12,57 +39,77 @@ const API_URL = import.meta.env.VITE_API_URL;
 function TextPreview({ url }) {
   const [text, setText] = useState('');
   useEffect(() => {
-    fetch(url).then(r => r.text()).then(setText).catch(() => setText('Không thể tải nội dung file.'));
+    fetch(url)
+      .then((r) => r.text())
+      .then(setText)
+      .catch(() => setText('Không thể tải nội dung file.'));
   }, [url]);
+
   return (
-    <pre style={{ margin: 0, padding: '24px 32px', background: '#1e293b', color: '#e2e8f0', fontSize: '13px', lineHeight: 1.7, overflowX: 'auto', maxHeight: '600px', overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-      {text || 'Đang tải...'}
+    <pre className="m-0 p-6 bg-slate-900 text-slate-200 text-xs font-mono leading-relaxed overflow-x-auto max-h-[600px] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-800">
+      {text || 'Đang tải nội dung văn bản...'}
     </pre>
   );
 }
 
 function PDFPreview({ url, docId }) {
-  const [mode, setMode] = useState('google'); // 'google' | 'direct'
-  const API_URL = import.meta.env.VITE_API_URL;
+  const [mode, setMode] = useState('google');
   const token = localStorage.getItem('token');
   const proxyUrl = `${API_URL}/api/documents/proxy-file/${docId}?token=${token}`;
   const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 
   return (
-    <div style={{ background: '#1e293b' }}>
-      {/* Toolbar */}
-      <div style={{ padding: '8px 16px', background: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setMode('google')}
-            style={{ padding: '4px 12px', background: mode === 'google' ? '#3b82f6' : '#475569', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
-          >🌐 Google Viewer</button>
-          <button
-            onClick={() => setMode('proxy')}
-            style={{ padding: '4px 12px', background: mode === 'proxy' ? '#3b82f6' : '#475569', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
-          >🔄 Proxy</button>
+    <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 flex-wrap gap-2">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-800 border border-slate-700/60">
+          {[
+            { id: 'google', label: 'Google Viewer' },
+            { id: 'proxy', label: 'Máy chủ Proxy' },
+          ].map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMode(m.id)}
+              className={`px-3 py-1 rounded-lg text-xs font-bold border-0 cursor-pointer transition-all ${
+                mode === m.id
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: '12px', color: '#60a5fa', textDecoration: 'none' }}>↗ Mở tab mới</a>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-indigo-400 hover:text-indigo-300 no-underline flex items-center gap-1.5 font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" /> Mở trong tab mới
+        </a>
       </div>
-
-      {/* Viewer */}
-      {mode === 'google' ? (
-        <iframe
-          key="google"
-          src={googleViewerUrl}
-          title="PDF Preview - Google"
-          style={{ width: '100%', height: '700px', border: 'none', display: 'block' }}
-        />
-      ) : (
-        <iframe
-          key="proxy"
-          src={proxyUrl}
-          title="PDF Preview - Proxy"
-          style={{ width: '100%', height: '700px', border: 'none', display: 'block' }}
-        />
-      )}
+      <iframe
+        key={mode}
+        src={mode === 'google' ? googleViewerUrl : proxyUrl}
+        title="PDF Preview"
+        className="w-full border-0 block"
+        style={{ height: '720px' }}
+      />
     </div>
+  );
+}
+
+function ActionBtn({ onClick, className, children, disabled }) {
+  return (
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border-0 cursor-pointer transition-all shadow-2xs ${className}`}
+    >
+      {children}
+    </motion.button>
   );
 }
 
@@ -76,6 +123,7 @@ function DocumentDetail() {
   const [rating, setRating] = useState({ avgScore: null, totalRatings: 0, userScore: null });
   const [related, setRelated] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const isAuthenticated = !!localStorage.getItem('token');
   const PREVIEWABLE = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
 
@@ -86,54 +134,78 @@ function DocumentDetail() {
         const docRes = await axiosClient.get(`/documents/${id}`);
         setDoc(docRes.data);
         setIsSaved(docRes.data.isSaved || false);
-        setRating({ avgScore: docRes.data.avgScore, totalRatings: docRes.data.totalRatings, userScore: docRes.data.userScore });
+        setRating({
+          avgScore: docRes.data.avgScore,
+          totalRatings: docRes.data.totalRatings,
+          userScore: docRes.data.userScore,
+        });
+
         if (docRes.data.category_id) {
-          axiosClient.get(`/documents?category=${docRes.data.category_id}&limit=4`)
-            .then(r => setRelated(r.data.documents.filter(d => d.id !== parseInt(id)).slice(0, 3)))
+          axiosClient
+            .get(`/documents?category=${docRes.data.category_id}&limit=4`)
+            .then((r) => setRelated(r.data.documents.filter((d) => d.id !== parseInt(id)).slice(0, 3)))
             .catch(() => {});
         }
+
         if (isAuthenticated) {
           const userRes = await axiosClient.get('/auth/me');
           setCurrentUser(userRes.data);
         }
-      } catch { toast.error('Không tìm thấy tài liệu!'); }
-      finally { setLoading(false); }
+      } catch {
+        toast.error('Không tìm thấy tài liệu!');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
-  }, [id]);
+  }, [id, isAuthenticated]);
 
   const handleRate = async (score) => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để đánh giá!'); return; }
+    if (!isAuthenticated) {
+      toast.error('Vui lòng đăng nhập để đánh giá!');
+      return;
+    }
     try {
       const res = await axiosClient.post(`/documents/${id}/rate`, { score });
-      setRating({ avgScore: res.data.avgScore, totalRatings: res.data.totalRatings, userScore: res.data.userScore });
+      setRating({
+        avgScore: res.data.avgScore,
+        totalRatings: res.data.totalRatings,
+        userScore: res.data.userScore,
+      });
       toast.success(`Đã đánh giá ${score} sao!`);
-    } catch { toast.error('Lỗi khi đánh giá!'); }
+    } catch {
+      toast.error('Lỗi khi gửi đánh giá!');
+    }
   };
 
   const handleView = async () => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để xem tài liệu!'); return; }
+    if (!isAuthenticated) {
+      toast.error('Vui lòng đăng nhập để xem tài liệu!');
+      return;
+    }
     try {
       await axiosClient.post(`/documents/${id}/view`);
-      openOrDownload(`${API_URL}${doc.file_url}`, doc.file_type, doc.file_url.split('/').pop(), handleDownload);
-      setDoc(d => ({ ...d, view_count: d.view_count + 1 }));
+      openOrDownload(
+        `${API_URL}${doc.file_url}`,
+        doc.file_type,
+        doc.file_url.split('/').pop(),
+        handleDownload
+      );
+      setDoc((d) => ({ ...d, view_count: (d.view_count || 0) + 1 }));
     } catch {}
   };
 
   const handleDownload = async () => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để tải xuống!'); return; }
+    if (!isAuthenticated) {
+      toast.error('Vui lòng đăng nhập để tải xuống!');
+      return;
+    }
     try {
       await axiosClient.post(`/documents/${id}/download`);
-
       const token = localStorage.getItem('token');
       const proxyUrl = `${API_URL}/api/documents/proxy-file/${id}?token=${token}`;
       const res = await fetch(proxyUrl);
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`HTTP ${res.status}: ${errText}`);
-      }
-
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -145,13 +217,16 @@ function DocumentDetail() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-
-      setDoc(d => ({ ...d, download_count: d.download_count + 1 }));
-      toast.success('Đang tải xuống...');
+      setDoc((d) => ({ ...d, download_count: (d.download_count || 0) + 1 }));
+      toast.success('Bắt đầu tải xuống...');
     } catch (err) {
       if (err.response?.data?.limitReached) {
-        toast.error('Đã đạt giới hạn tải tháng này, vui lòng nâng cấp tài khoản VIP để tiếp tục', { duration: 4000 });
-        setTimeout(() => { window.location.href = '/vip'; }, 2000);
+        toast.error('Đã đạt giới hạn tải tháng này. Nâng cấp VIP để tải không giới hạn!', {
+          duration: 4000,
+        });
+        setTimeout(() => {
+          window.location.href = '/vip';
+        }, 2000);
       } else {
         toast.error('Lỗi khi tải file!');
       }
@@ -159,21 +234,30 @@ function DocumentDetail() {
   };
 
   const handleToggleSave = async () => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập!'); return; }
+    if (!isAuthenticated) {
+      toast.error('Vui lòng đăng nhập!');
+      return;
+    }
     try {
       const res = await axiosClient.post(`/documents/${id}/save`);
       setIsSaved(res.data.isSaved);
-      toast.success(res.data.isSaved ? 'Đã lưu tài liệu!' : 'Đã bỏ lưu!');
-    } catch { toast.error('Lỗi!'); }
+      toast.success(res.data.isSaved ? 'Đã lưu vào danh sách yêu thích!' : 'Đã bỏ lưu tài liệu!');
+    } catch {
+      toast.error('Lỗi khi lưu!');
+    }
   };
 
   const handleAdminDelete = async () => {
-    if (!window.confirm('⚠️ Chuyển tài liệu vào thùng rác?')) return;
+    if (!window.confirm('Chuyển tài liệu vào thùng rác?')) return;
     try {
       await axiosClient.delete(`/documents/${id}`);
-      toast.success('Đã chuyển vào thùng rác!');
-      setTimeout(() => { window.location.href = '/'; }, 800);
-    } catch { toast.error('Lỗi khi xóa!'); }
+      toast.success('Đã chuyển tài liệu vào thùng rác!');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 800);
+    } catch {
+      toast.error('Lỗi khi xóa!');
+    }
   };
 
   const handleSubmitComment = async (e) => {
@@ -181,257 +265,453 @@ function DocumentDetail() {
     if (!newComment.trim()) return;
     try {
       const res = await axiosClient.post(`/documents/${id}/comments`, { content: newComment });
-      setDoc(d => ({ ...d, comments: [res.data.comment, ...(d.comments || [])] }));
+      setDoc((d) => ({ ...d, comments: [res.data.comment, ...(d.comments || [])] }));
       setNewComment('');
-      toast.success('Đã bình luận!');
-    } catch { toast.error('Bạn cần đăng nhập để bình luận!'); }
+      toast.success('Bình luận thành công!');
+    } catch {
+      toast.error('Bạn cần đăng nhập để bình luận!');
+    }
   };
 
   const handleDeleteComment = async (commentId) => {
     try {
       await axiosClient.delete(`/documents/comments/${commentId}`);
-      setDoc(d => ({ ...d, comments: (d.comments || []).filter(c => c.id !== commentId) }));
+      setDoc((d) => ({ ...d, comments: (d.comments || []).filter((c) => c.id !== commentId) }));
       toast.success('Đã xóa bình luận!');
-    } catch { toast.error('Lỗi khi xóa!'); }
+    } catch {
+      toast.error('Lỗi khi xóa!');
+    }
   };
 
-  if (loading) return <Spinner />;
-  if (!doc) return <div style={{ textAlign: 'center', padding: '60px' }}>Không tìm thấy tài liệu.</div>;
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    toast.success('Đã sao chép liên kết tài liệu!');
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
-  const fileIcon = FILE_ICONS[doc.file_type] || '📎';
+  if (loading) {
+    return (
+      <div className="py-20 flex justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (!doc) {
+    return (
+      <div className="text-center py-20 bg-white/70 backdrop-blur-md rounded-3xl border border-slate-200/80 p-8 max-w-lg mx-auto">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mx-auto mb-3">
+          <FolderOpen className="w-8 h-8" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-800">Không tìm thấy tài liệu</h2>
+        <p className="text-xs text-slate-400 mt-1 mb-4">
+          Tài liệu này có thể đã bị xóa hoặc liên kết không hợp lệ.
+        </p>
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold no-underline"
+        >
+          <ArrowLeft className="w-4 h-4" /> Quay lại trang chủ
+        </Link>
+      </div>
+    );
+  }
+
   const fileLabel = getFileLabel(doc.file_type, doc.file_url);
-  const badgeColor = FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9', color: '#475569' };
+  const fileUrl = doc.file_url?.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`;
 
   return (
     <>
-    <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      {/* BREADCRUMB */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', fontSize: '13px', color: '#94a3b8', flexWrap: 'wrap' }}>
-        <Link to="/" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}>Trang chủ</Link>
-        <span>›</span>
-        {doc.doc_type && <>
-          <Link to={`/?type=${doc.doc_type}`} style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}>{doc.doc_type}</Link>
-          <span>›</span>
-        </>}
-        <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{doc.title}</span>
-      </div>
+      <div className="space-y-6">
+        {/* ── BREADCRUMB ── */}
+        <nav className="flex items-center gap-2 text-xs font-medium text-slate-400 flex-wrap">
+          <Link to="/" className="text-slate-500 hover:text-indigo-600 transition-colors no-underline">
+            Trang chủ
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+          {doc.doc_type && (
+            <>
+              <Link
+                to={`/?type=${doc.doc_type}`}
+                className="text-slate-500 hover:text-indigo-600 transition-colors no-underline"
+              >
+                {doc.doc_type}
+              </Link>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+            </>
+          )}
+          <span className="text-slate-800 font-bold truncate max-w-[260px]">{doc.title}</span>
+        </nav>
 
-      {/* LAYOUT 2 CỘT */}
-      <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+        {/* ── HERO WORKSPACE CARD ── */}
+        <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 shadow-sm overflow-hidden">
+          {/* TOP BANNER */}
+          <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col md:flex-row gap-6 justify-between items-start">
+            <div className="space-y-4 max-w-3xl">
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
+                  {fileLabel}
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200/70">
+                  {doc.doc_type || 'Chung'}
+                </span>
+                {doc.category?.name && (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200/70">
+                    {doc.category.name}
+                  </span>
+                )}
+              </div>
 
-        {/* CỘT TRÁI — CARD CHÍNH */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+              {/* Title */}
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                {doc.title}
+              </h1>
 
-            {/* HEADER */}
-            <div style={{ padding: '32px', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: '56px', flexShrink: 0 }}>{fileIcon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                    <span style={{ padding: '3px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', background: badgeColor.bg, color: badgeColor.color }}>{fileLabel}</span>
-                    <span style={{ padding: '3px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', background: '#e0f2fe', color: '#0369a1' }}>{doc.doc_type}</span>
-                    <span style={{ padding: '3px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', background: '#f3e8ff', color: '#7c3aed' }}>{doc.category?.name}</span>
+              {/* Author & Timestamp Bar */}
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs ring-2 ring-white">
+                    {doc.user?.name?.charAt(0).toUpperCase()}
                   </div>
-                  <h1 style={{ margin: '0 0 12px', fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', lineHeight: 1.4 }}>{doc.title}</h1>
-                  <div style={{ display: 'flex', gap: '20px', fontSize: '13px', color: '#64748b', flexWrap: 'wrap' }}>
-                    <span>👤 <Link to={`/users/${doc.user?.id}`} style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}>{doc.user?.name}</Link></span>
-                    <span>📅 {new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
-                    <span>👁️ {doc.view_count} lượt xem</span>
-                    <span>⬇️ {doc.download_count} lượt tải</span>
-                  </div>
-                  <div style={{ marginTop: '12px' }}>
-                    <StarRating avgScore={rating.avgScore} totalRatings={rating.totalRatings} userScore={rating.userScore} onRate={handleRate} readonly={!isAuthenticated} />
-                    {!isAuthenticated && <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>Đăng nhập để đánh giá</p>}
-                  </div>
+                  <Link
+                    to={`/users/${doc.user?.id}`}
+                    className="font-bold text-slate-700 hover:text-indigo-600 transition-colors no-underline"
+                  >
+                    {doc.user?.name}
+                  </Link>
                 </div>
+
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {new Date(doc.created_at).toLocaleDateString('vi-VN')}
+                </span>
+
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <Eye className="w-3.5 h-3.5" />
+                  {doc.view_count || 0} lượt xem
+                </span>
+
+                <span className="flex items-center gap-1.5 font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                  <Download className="w-3.5 h-3.5" />
+                  {doc.download_count || 0} lượt tải
+                </span>
+              </div>
+
+              {/* Star Rating Bar */}
+              <div className="pt-2">
+                <StarRating
+                  avgScore={rating.avgScore}
+                  totalRatings={rating.totalRatings}
+                  userScore={rating.userScore}
+                  onRate={handleRate}
+                  readonly={!isAuthenticated}
+                />
+                {!isAuthenticated && (
+                  <p className="text-[11px] text-slate-400 mt-1">Đăng nhập để đánh giá tài liệu này</p>
+                )}
               </div>
             </div>
 
-            {/* PREVIEW INLINE */}
-            {showPreview && PREVIEWABLE.includes(doc.file_type) && (
-              <div style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 32px', background: '#f8fafc' }}>
-                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>📄 Xem trước: {doc.title}</span>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <a href={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'none', fontWeight: 'bold' }}>↗ Mở tab mới</a>
-                    <button onClick={() => setShowPreview(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '16px' }}>✕</button>
-                  </div>
-                </div>
-                {doc.file_type === 'text/plain' ? <TextPreview url={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} />
-                  : doc.file_type.startsWith('image/') ? (
-                    <div style={{ padding: '16px 32px', textAlign: 'center', background: '#1e293b' }}>
-                      <img src={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} alt={doc.title} style={{ maxWidth: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px' }} />
-                    </div>
-                  ) : doc.file_type === 'application/pdf' ? (
-                    <PDFPreview url={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} docId={doc.id} />
-                  ) : (
-                    <div style={{ padding: '32px', textAlign: 'center', background: '#1e293b', color: '#e2e8f0' }}>
-                      <p style={{ marginBottom: '12px' }}>Không thể xem trước định dạng này.</p>
-                      <a href={doc.file_url.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer"
-                        style={{ padding: '10px 20px', background: '#3b82f6', color: '#fff', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold' }}>
-                        ↗ Mở trong tab mới
-                      </a>
-                    </div>
-                  )}
-              </div>
-            )}
+            {/* ACTION BUTTONS GROUP */}
+            <div className="flex flex-wrap sm:flex-col gap-2 shrink-0 w-full sm:w-auto">
+              <ActionBtn
+                onClick={handleDownload}
+                className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-500/20"
+              >
+                <Download className="w-4 h-4" /> Tải về máy
+              </ActionBtn>
 
-            {/* MÔ TẢ */}
-            {doc.description && (
-              <div style={{ padding: '24px 32px', borderBottom: '1px solid #f1f5f9' }}>
-                <h3 style={{ margin: '0 0 10px', fontSize: '15px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mô tả</h3>
-                <p style={{ margin: 0, color: '#334155', lineHeight: 1.7, fontSize: '15px' }}>{doc.description}</p>
-              </div>
-            )}
-
-            {/* NÚT HÀNH ĐỘNG */}
-            <div style={{ padding: '24px 32px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               {PREVIEWABLE.includes(doc.file_type) ? (
-                <button onClick={() => {
-                  if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để xem tài liệu!'); return; }
-                  setShowPreview(p => !p);
-                }} style={{ padding: '12px 24px', background: showPreview ? '#3b82f6' : '#f1f5f9', color: showPreview ? '#fff' : '#334155', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                  {showPreview ? '🔼 Đóng xem' : '👀 Xem tài liệu'}
-                </button>
+                <ActionBtn
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      toast.error('Vui lòng đăng nhập!');
+                      return;
+                    }
+                    setShowPreview((p) => !p);
+                  }}
+                  className={`w-full sm:w-auto ${
+                    showPreview
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Eye className="w-4 h-4" />
+                  {showPreview ? 'Thu gọn xem trước' : 'Xem trực tuyến'}
+                </ActionBtn>
               ) : (
-                <button onClick={handleView} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>👀 Xem tài liệu</button>
+                <ActionBtn
+                  onClick={handleView}
+                  className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                >
+                  <Eye className="w-4 h-4" /> Xem tài liệu
+                </ActionBtn>
               )}
-              <button onClick={handleDownload} style={{ padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>⬇️ Tải xuống</button>
-              {isAuthenticated && (
-                <button onClick={handleToggleSave} style={{ padding: '12px 24px', background: isSaved ? '#fee2e2' : '#fef3c7', color: isSaved ? '#b91c1c' : '#d97706', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                  {isSaved ? '❌ Bỏ lưu' : '🔖 Lưu tài liệu'}
-                </button>
-              )}
-              <button onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Đã copy link!'); }} style={{ padding: '12px 24px', background: '#f0fdf4', color: '#16a34a', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>🔗 Chia sẻ</button>
-              {isAuthenticated && (
-                <button onClick={async () => {
-                  const reason = prompt('Lý do báo cáo vi phạm:');
-                  if (!reason?.trim()) return;
-                  try { await axiosClient.post(`/documents/${id}/report`, { reason }); toast.success('Đã gửi báo cáo!'); }
-                  catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
-                }} style={{ padding: '12px 24px', background: '#fff5f5', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>🚨 Báo cáo</button>
-              )}
-              {currentUser?.role === 'ADMIN' && (
-                <button onClick={handleAdminDelete} style={{ padding: '12px 24px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>🗑️ Xóa tài liệu</button>
-              )}
-            </div>
 
-            {/* BÌNH LUẬN */}
-            <div style={{ padding: '24px 32px' }}>
-              <h3 style={{ margin: '0 0 20px', fontSize: '17px', fontWeight: 'bold', color: '#1a1a1a' }}>💬 Bình luận ({doc.comments?.length || 0})</h3>
-              {isAuthenticated ? (
-                <form onSubmit={handleSubmitComment} style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#3b82f6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', flexShrink: 0 }}>
-                    {currentUser?.name?.charAt(0).toUpperCase()}
-                  </div>
-                  <input type="text" placeholder="Viết bình luận..." value={newComment} onChange={e => setNewComment(e.target.value)} style={{ flex: 1, padding: '10px 16px', borderRadius: '20px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }} />
-                  <button type="submit" style={{ padding: '10px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold' }}>Gửi</button>
-                </form>
-              ) : (
-                <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
-                  <Link to="/login" style={{ color: '#3b82f6', fontWeight: 'bold' }}>Đăng nhập</Link> để bình luận.
-                </p>
+              {isAuthenticated && (
+                <ActionBtn
+                  onClick={handleToggleSave}
+                  className={`w-full sm:w-auto border ${
+                    isSaved
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                  {isSaved ? 'Đã lưu' : 'Lưu tài liệu'}
+                </ActionBtn>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {doc.comments?.length === 0 && <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px 0', fontSize: '14px' }}>Chưa có bình luận nào.</p>}
-                {doc.comments?.map(cmt => (
-                  <div key={cmt.id} style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', fontSize: '14px', overflow: 'hidden', flexShrink: 0 }}>
-                      {cmt.user?.avatar_url ? <img src={`${API_URL}${cmt.user.avatar_url}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : cmt.user?.name?.charAt(0).toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1, background: '#f8fafc', padding: '12px 16px', borderRadius: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#1a1a1a' }}>{cmt.user?.name}</span>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(cmt.created_at).toLocaleDateString('vi-VN')}</span>
-                          {(currentUser?.id === cmt.user_id || currentUser?.role === 'ADMIN') && (
-                            <button onClick={() => handleDeleteComment(cmt.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '12px', padding: '2px 6px' }}>🗑️</button>
-                          )}
-                        </div>
-                      </div>
-                      <p style={{ margin: 0, fontSize: '14px', color: '#334155', lineHeight: 1.5 }}>{cmt.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+
+              <ActionBtn
+                onClick={handleShare}
+                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
+                {copiedLink ? 'Đã sao chép' : 'Chia sẻ'}
+              </ActionBtn>
+
+              {currentUser?.role === 'ADMIN' && (
+                <ActionBtn
+                  onClick={handleAdminDelete}
+                  className="w-full sm:w-auto bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100"
+                >
+                  <Trash2 className="w-4 h-4" /> Xóa tài liệu
+                </ActionBtn>
+              )}
             </div>
           </div>
 
-          {/* TÀI LIỆU LIÊN QUAN */}
-          {related.length > 0 && (
-            <div style={{ marginTop: '28px' }}>
-              <h3 style={{ fontSize: '17px', fontWeight: 'bold', color: '#334155', marginBottom: '16px' }}>📎 Tài liệu liên quan</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '14px' }}>
-                {related.map(r => {
-                  const icon = FILE_ICONS[r.file_type] || '📎';
-                  const label = getFileLabel(r.file_type, r.file_url);
-                  const bc = FILE_BADGE_COLORS[label] || { bg: '#f1f5f9', color: '#475569' };
-                  return (
-                    <Link key={r.id} to={`/documents/${r.id}`} style={{ textDecoration: 'none' }}>
-                      <div style={{ background: '#fff', padding: '14px 16px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', display: 'flex', gap: '12px', alignItems: 'flex-start', transition: '0.15s' }}
-                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)'}
-                        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.04)'}>
-                        <span style={{ fontSize: '26px', flexShrink: 0 }}>{icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '13px', color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</p>
-                            <span style={{ flexShrink: 0, padding: '1px 7px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', background: bc.bg, color: bc.color }}>{label}</span>
-                          </div>
-                          <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>👁️ {r.view_count} · ⬇️ {r.download_count}</p>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
+          {/* ── LIVE PREVIEW CANVAS ── */}
+          <AnimatePresence>
+            {showPreview && PREVIEWABLE.includes(doc.file_type) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="border-b border-slate-200 bg-slate-900 p-4 sm:p-6"
+              >
+                <div className="flex items-center justify-between text-white text-xs mb-3">
+                  <span className="font-bold flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-400" /> Bản xem trước trực tuyến
+                  </span>
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white bg-transparent border-0 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {doc.file_type === 'text/plain' ? (
+                  <TextPreview url={fileUrl} />
+                ) : doc.file_type.startsWith('image/') ? (
+                  <div className="p-6 text-center bg-slate-950 rounded-2xl border border-slate-800">
+                    <img
+                      src={fileUrl}
+                      alt={doc.title}
+                      className="max-w-full max-h-[600px] object-contain rounded-xl mx-auto shadow-xl"
+                    />
+                  </div>
+                ) : doc.file_type === 'application/pdf' ? (
+                  <PDFPreview url={fileUrl} docId={doc.id} />
+                ) : (
+                  <div className="p-8 text-center text-slate-300">
+                    <p className="text-xs mb-3">Không hỗ trợ xem trước định dạng này.</p>
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold no-underline inline-block"
+                    >
+                      Mở trong tab mới
+                    </a>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── DESCRIPTION BLOCK ── */}
+          {doc.description && (
+            <div className="p-6 sm:p-8 border-b border-slate-100">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                Mô tả chi tiết
+              </h3>
+              <p className="text-sm text-slate-700 leading-relaxed max-w-4xl whitespace-pre-line">
+                {doc.description}
+              </p>
             </div>
           )}
+
+          {/* ── COMMENTS & DISCUSSION STUDIO ── */}
+          <div className="p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <MessageSquare className="w-4 h-4 text-indigo-600" />
+                Thảo luận & Bình luận
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                  {doc.comments?.length || 0}
+                </span>
+              </h3>
+            </div>
+
+            {/* Comment Form */}
+            {isAuthenticated ? (
+              <form onSubmit={handleSubmitComment} className="flex gap-3 mb-8">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                  {currentUser?.name?.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Viết nhận xét hoặc đặt câu hỏi về tài liệu này..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 text-xs outline-none bg-slate-50/50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 transition-all font-medium"
+                  />
+                  <motion.button
+                    type="submit"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="px-5 py-2.5 bg-indigo-600 text-white rounded-2xl text-xs font-bold border-0 cursor-pointer hover:bg-indigo-700 shadow-md shadow-indigo-500/20 transition-all"
+                  >
+                    Gửi
+                  </motion.button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 text-xs text-slate-600 mb-6 flex items-center justify-between">
+                <span>Bạn muốn tham gia trao đổi ý kiến về tài liệu này?</span>
+                <Link
+                  to="/login"
+                  className="font-bold text-indigo-600 hover:text-indigo-700 no-underline"
+                >
+                  Đăng nhập ngay →
+                </Link>
+              </div>
+            )}
+
+            {/* Comment Stream */}
+            <div className="space-y-3">
+              {doc.comments?.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  Chưa có bình luận nào. Hãy là người đầu tiên để lại nhận xét!
+                </div>
+              ) : (
+                doc.comments?.map((cmt) => (
+                  <motion.div
+                    key={cmt.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex gap-3 p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0 overflow-hidden">
+                      {cmt.user?.avatar_url ? (
+                        <img
+                          src={
+                            cmt.user.avatar_url.startsWith('http')
+                              ? cmt.user.avatar_url
+                              : `${API_URL}${cmt.user.avatar_url}`
+                          }
+                          alt="avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        cmt.user?.name?.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-slate-900">{cmt.user?.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(cmt.created_at).toLocaleDateString('vi-VN')}
+                          </span>
+                          {(currentUser?.id === cmt.user_id || currentUser?.role === 'ADMIN') && (
+                            <button
+                              onClick={() => handleDeleteComment(cmt.id)}
+                              className="text-slate-400 hover:text-rose-500 bg-transparent border-0 cursor-pointer p-0.5 transition-colors"
+                              title="Xóa bình luận"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed m-0">{cmt.content}</p>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* CỘT PHẢI — THÔNG BÁO TỪ ADMIN */}
+        {/* ── ADMIN NOTICES (IF ANY) ── */}
         {doc.adminNotices?.length > 0 && (
-          <div style={{ width: '280px', flexShrink: 0 }}>
-            <div style={{ background: '#fff', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden', position: 'sticky', top: '80px' }}>
-              <div style={{ padding: '14px 16px', background: '#fef9c3', borderBottom: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '16px' }}>🛡️</span>
-                <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#92400e' }}>Thông báo từ Admin</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {doc.adminNotices.map((notice, i) => (
-                  <div key={notice.id} style={{
-                    padding: '14px 16px',
-                    borderBottom: i < doc.adminNotices.length - 1 ? '1px solid #f1f5f9' : 'none',
-                    background: notice.action === 'REMOVE' ? '#fff5f5' : '#fffbeb',
-                  }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '16px', flexShrink: 0 }}>{notice.action === 'REMOVE' ? '🚫' : '⚠️'}</span>
-                      <span style={{ fontWeight: 'bold', fontSize: '13px', color: notice.action === 'REMOVE' ? '#b91c1c' : '#92400e' }}>
-                        {notice.action === 'REMOVE' ? 'Bị gắn cờ vi phạm' : `Cảnh báo #${i + 1}`}
-                      </span>
-                    </div>
-                    {notice.admin_note && (
-                      <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#374151', paddingLeft: '24px' }}>
-                        📝 <b>"{notice.admin_note}"</b>
-                      </p>
-                    )}
-                    <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', paddingLeft: '24px' }}>
-                      🕐 {new Date(notice.created_at).toLocaleString('vi-VN')}
-                    </p>
-                  </div>
-                ))}
-              </div>
+          <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 overflow-hidden">
+            <div className="flex items-center gap-2 font-bold text-xs text-amber-800 mb-3">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span>Thông báo kiểm duyệt từ Quản trị viên</span>
+            </div>
+            <div className="space-y-2">
+              {doc.adminNotices.map((notice) => (
+                <div key={notice.id} className="p-3 bg-white rounded-xl border border-amber-200 text-xs">
+                  <p className="font-semibold text-amber-900">{notice.admin_note}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {new Date(notice.created_at).toLocaleString('vi-VN')}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
+        {/* ── RELATED DOCUMENTS BENTO ── */}
+        {related.length > 0 && (
+          <div className="space-y-3 pt-4">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-indigo-600" /> Tài liệu cùng chuyên mục
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {related.map((r) => {
+                const rLabel = getFileLabel(r.file_type, r.file_url);
+                return (
+                  <Link key={r.id} to={`/documents/${r.id}`} className="no-underline block group">
+                    <div className="p-4 rounded-2xl bg-white/80 hover:bg-white border border-slate-200/80 hover:border-indigo-200 hover:shadow-lg transition-all duration-200 flex flex-col justify-between h-32">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {rLabel}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {r.view_count || 0} lượt xem
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-2">
+                        {r.title}
+                      </h4>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+                        <span className="truncate max-w-[120px]">{r.user?.name}</span>
+                        <span className="font-bold text-indigo-600 flex items-center gap-1">
+                          <Download className="w-3 h-3" /> {r.download_count || 0}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
 
-    {/* CHAT BOX AI — chỉ hiện khi đã đăng nhập */}
-    {isAuthenticated && (
-      <ChatBox documentId={parseInt(id)} documentTitle={doc.title} />
-    )}
+      {/* ── AI COPILOT CHAT BOX ── */}
+      {isAuthenticated && (
+        <ChatBox documentId={parseInt(id)} documentTitle={doc.title} />
+      )}
     </>
   );
 }

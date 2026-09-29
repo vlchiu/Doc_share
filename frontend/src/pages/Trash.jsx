@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Trash2, RotateCcw, AlertOctagon, FolderOpen, Calendar, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
 import Spinner from '../components/Spinner';
@@ -8,79 +10,118 @@ function Trash() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axiosClient.get('/documents/trash')
-      .then(res => setDocs(res.data))
-      .catch(() => toast.error('Lỗi tải thùng rác!'))
+    axiosClient
+      .get('/documents/trash')
+      .then((res) => setDocs(res.data || []))
+      .catch(() => toast.error('Lỗi khi tải thùng rác!'))
       .finally(() => setLoading(false));
   }, []);
 
   const handleRestore = async (id) => {
     try {
       await axiosClient.put(`/documents/${id}/restore`);
-      setDocs(docs.filter(d => d.id !== id));
-      toast.success('Đã khôi phục tài liệu!');
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+      setDocs(docs.filter((d) => d.id !== id));
+      toast.success('Đã khôi phục tài liệu thành công!');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi khôi phục!');
+    }
   };
 
   const handlePermanentDelete = async (id) => {
-    if (!window.confirm('⚠️ Xóa vĩnh viễn? Không thể khôi phục!')) return;
+    if (!window.confirm('Cảnh báo: Tài liệu sẽ bị xóa vĩnh viễn và không thể khôi phục! Bạn có chắc chắn?'))
+      return;
     try {
       await axiosClient.delete(`/documents/${id}/permanent`);
-      setDocs(docs.filter(d => d.id !== id));
-      toast.success('Đã xóa vĩnh viễn!');
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+      setDocs(docs.filter((d) => d.id !== id));
+      toast.success('Đã xóa vĩnh viễn tài liệu!');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi xóa!');
+    }
   };
 
-  const btnStyle = { padding: '8px 14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' };
-
-  if (loading) return <Spinner />;
+  if (loading) {
+    return (
+      <div className="py-20 flex justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ color: '#1e293b' }}>
-      {/* HEADER GRADIENT */}
-      <div style={{ background: 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 60%, #f97316 100%)', borderRadius: '16px', padding: '24px 32px', marginBottom: '24px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-          <div>
-            <h2 style={{ margin: '0 0 4px', fontSize: '22px', color: '#fff', fontWeight: 'bold' }}>🗑️ Thùng rác</h2>
-            <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
-              {docs.length > 0 ? `${docs.length} tài liệu — có thể khôi phục hoặc xóa vĩnh viễn` : 'Thùng rác trống'}
-            </p>
+    <div className="space-y-6">
+      {/* ── HEADER BENTO ── */}
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 p-8 text-white relative overflow-hidden border border-slate-800 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="relative z-10 max-w-xl">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-rose-300 text-xs font-bold mb-3 border border-white/10">
+            <Trash2 className="w-3.5 h-3.5" /> Quản lý tài liệu đã xóa
           </div>
-          {docs.length > 0 && (
-            <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '4px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
-              {docs.length} mục
-            </span>
-          )}
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Thùng rác</h1>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1">
+            {docs.length > 0
+              ? `Hiện có ${docs.length} tài liệu trong thùng rác. Bạn có thể khôi phục hoặc dọn dẹp vĩnh viễn.`
+              : 'Thùng rác hiện đang hoàn toàn trống.'}
+          </p>
         </div>
+
+        {docs.length > 0 && (
+          <span className="relative z-10 px-4 py-2 rounded-2xl bg-white/10 border border-white/15 text-xs font-bold text-white shrink-0">
+            {docs.length} mục đã xóa
+          </span>
+        )}
       </div>
 
+      {/* ── LIST OR EMPTY STATE ── */}
       {docs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '64px', marginBottom: '12px' }}>🗑️</div>
-          <p style={{ fontSize: '17px', color: '#64748b', fontWeight: '500' }}>Thùng rác trống.</p>
-          <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '6px' }}>Các tài liệu bị xóa sẽ xuất hiện ở đây.</p>
+        <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 p-12 text-center backdrop-blur-sm">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-4">
+            <Trash2 className="w-8 h-8 opacity-60" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Thùng rác trống</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            Các tài liệu bị xóa gần đây sẽ được tạm lưu tại đây để bạn có thể khôi phục khi cần.
+          </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-          {docs.map(doc => (
-            <div key={doc.id} style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #fee2e2', opacity: 0.9 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {docs.map((doc) => (
+            <div
+              key={doc.id}
+              className="rounded-3xl p-5 bg-white/85 border border-slate-200/80 shadow-sm flex flex-col justify-between backdrop-blur-sm opacity-90 hover:opacity-100 transition-opacity"
+            >
               <div>
-                <h3 style={{ margin: '0 0 5px', fontSize: '15px', fontWeight: 'bold', color: '#94a3b8', textDecoration: 'line-through', lineHeight: 1.4 }}>{doc.title}</h3>
-                <span style={{ fontSize: '11px', color: '#fca5a5', background: '#fff5f5', padding: '2px 8px', borderRadius: '6px' }}>
-                  🗑️ {new Date(doc.deleted_at).toLocaleString('vi-VN')}
-                </span>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Đã xóa: {new Date(doc.deleted_at).toLocaleDateString('vi-VN')}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {doc.doc_type || 'Chung'}
+                  </span>
+                </div>
+
+                <h3 className="font-bold text-sm text-slate-500 line-through line-clamp-2 leading-snug my-2">
+                  {doc.title}
+                </h3>
+
+                <p className="text-xs text-slate-400">
+                  {doc.category?.name || 'Tài liệu'} · Tác giả: {doc.user?.name}
+                </p>
               </div>
 
-              <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '9px 12px', borderRadius: '8px' }}>
-                👤 {doc.user?.name} · 📁 {doc.category?.name} · 🏷️ {doc.doc_type}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                <button onClick={() => handleRestore(doc.id)}
-                  style={{ ...btnStyle, flex: 1, background: '#dcfce7', color: '#16a34a' }}>♻️ Khôi phục</button>
-                <button onClick={() => handlePermanentDelete(doc.id)}
-                  style={{ ...btnStyle, flex: 1, background: '#fee2e2', color: '#b91c1c' }}>🗑️ Xóa vĩnh viễn</button>
+              {/* ACTION BUTTONS */}
+              <div className="flex gap-2 mt-5 pt-3 border-t border-slate-100">
+                <button
+                  onClick={() => handleRestore(doc.id)}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Khôi phục
+                </button>
+                <button
+                  onClick={() => handlePermanentDelete(doc.id)}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Xóa vĩnh viễn
+                </button>
               </div>
             </div>
           ))}

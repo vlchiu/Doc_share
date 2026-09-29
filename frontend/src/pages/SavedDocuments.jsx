@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Bookmark, BookmarkX, Eye, Download, FolderOpen, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
-import { FILE_ICONS, FILE_BADGE_COLORS, getFileLabel } from '../utils/fileHelper';
+import Spinner from '../components/Spinner';
+import { getFileLabel } from '../utils/fileHelper';
 
 function SavedDocuments() {
   const [savedDocs, setSavedDocs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axiosClient.get('/documents/saved')
-      .then(res => setSavedDocs(res.data))
-      .catch(() => toast.error('Lỗi tải dữ liệu!'))
+    axiosClient
+      .get('/documents/saved')
+      .then((res) => setSavedDocs(res.data || []))
+      .catch(() => toast.error('Lỗi khi tải danh sách đã lưu!'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -20,62 +24,111 @@ function SavedDocuments() {
     e.stopPropagation();
     try {
       await axiosClient.post(`/documents/${docId}/save`);
-      setSavedDocs(savedDocs.filter(doc => doc.id !== docId));
-      toast('Đã bỏ lưu.');
-    } catch { toast.error('Lỗi khi bỏ lưu!'); }
+      setSavedDocs(savedDocs.filter((doc) => doc.id !== docId));
+      toast.success('Đã bỏ lưu tài liệu!');
+    } catch {
+      toast.error('Lỗi khi bỏ lưu!');
+    }
   };
 
-  if (loading) return (
-    <div style={{ textAlign: 'center', padding: '60px' }}>
-      <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="py-20 flex justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ color: '#1e293b' }}>
-      <div style={{ background: 'linear-gradient(135deg, #065f46 0%, #10b981 60%, #06b6d4 100%)', borderRadius: '16px', padding: '24px 32px', marginBottom: '24px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-        <h2 style={{ margin: '0 0 4px', fontSize: '22px', color: '#fff', fontWeight: 'bold', position: 'relative' }}>🔖 Tài liệu đã lưu</h2>
-        <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: '13px', position: 'relative' }}>{savedDocs.length} tài liệu</p>
+    <div className="space-y-6">
+      {/* ── HEADER BENTO ── */}
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white relative overflow-hidden border border-slate-800 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="relative z-10 max-w-xl">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold mb-3 border border-white/10">
+            <Bookmark className="w-3.5 h-3.5" /> Bộ sưu tập cá nhân
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Tài liệu đã lưu</h1>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1">
+            Bạn đang lưu giữ <span className="font-bold text-white">{savedDocs.length}</span> tài liệu quan trọng để xem lại bất cứ lúc nào.
+          </p>
+        </div>
+
+        <Link
+          to="/"
+          className="relative z-10 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all no-underline shrink-0"
+        >
+          Khám phá thêm tài liệu <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
+      {/* ── LIST OR EMPTY STATE ── */}
       {savedDocs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <div style={{ fontSize: '56px', marginBottom: '12px' }}>🔖</div>
-          <p style={{ fontSize: '17px', color: '#64748b', fontWeight: '500' }}>Chưa có tài liệu nào được lưu.</p>
+        <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 p-12 text-center backdrop-blur-sm">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+            <FolderOpen className="w-8 h-8 opacity-60" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Chưa có tài liệu nào được lưu</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            Khi duyệt tài liệu, bấm vào nút "Lưu" để thêm vào danh sách này.
+          </p>
+          <Link
+            to="/"
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors no-underline"
+          >
+            Duyệt tài liệu ngay
+          </Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-          {savedDocs.map(doc => {
-            const fileIcon = FILE_ICONS[doc.file_type] || '📎';
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {savedDocs.map((doc) => {
             const fileLabel = getFileLabel(doc.file_type, doc.file_url);
-            const bc = FILE_BADGE_COLORS[fileLabel] || { bg: '#f1f5f9', color: '#475569' };
+
             return (
-              <Link key={doc.id} to={`/documents/${doc.id}`} style={{ textDecoration: 'none', display: 'block' }}>
-                <div style={{ background: '#fff', padding: '18px', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '10px', border: '1px solid #f1f5f9', transition: '0.2s', cursor: 'pointer' }}
-                  onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(16,185,129,0.1)'; e.currentTarget.style.borderColor = '#a7f3d0'; }}
-                  onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.05)'; e.currentTarget.style.borderColor = '#f1f5f9'; }}
-                >
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '26px', flexShrink: 0, lineHeight: 1 }}>{fileIcon}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1.4, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{doc.title}</h3>
-                        <span style={{ flexShrink: 0, padding: '2px 6px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', background: bc.bg, color: bc.color }}>{fileLabel}</span>
+              <Link
+                key={doc.id}
+                to={`/documents/${doc.id}`}
+                className="no-underline block group"
+              >
+                <div className="rounded-3xl p-5 bg-white/85 hover:bg-white border border-slate-200/80 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 flex flex-col justify-between h-full backdrop-blur-sm">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {fileLabel}
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        {doc.doc_type || 'Chung'}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-snug mb-2">
+                      {doc.title}
+                    </h3>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="truncate max-w-[140px] font-medium text-slate-600">
+                        {doc.user?.name || 'Tác giả'}
+                      </span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="flex items-center gap-1">
+                          <Eye className="w-3 h-3 text-slate-400" />
+                          {doc.view_count || 0}
+                        </span>
+                        <span className="flex items-center gap-1 font-semibold text-emerald-600">
+                          <Download className="w-3 h-3" />
+                          {doc.download_count || 0}
+                        </span>
                       </div>
                     </div>
-                  </div>
 
-                  <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '8px 10px', borderRadius: '7px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>👤 {doc.user?.name} · 📁 {doc.category?.name}</span>
-                    <span style={{ fontWeight: 'bold' }}>👁️ {doc.view_count || 0} · ⬇️ {doc.download_count || 0}</span>
+                    <button
+                      onClick={(e) => handleUnsave(e, doc.id)}
+                      className="w-full py-2 rounded-xl text-xs font-bold text-slate-500 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer border-0 flex items-center justify-center gap-1.5"
+                    >
+                      <BookmarkX className="w-3.5 h-3.5" /> Bỏ lưu tài liệu
+                    </button>
                   </div>
-
-                  <button onClick={e => handleUnsave(e, doc.id)}
-                    style={{ padding: '8px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', width: '100%', background: '#fee2e2', color: '#ef4444', marginTop: 'auto' }}>
-                    ❌ Bỏ lưu
-                  </button>
                 </div>
               </Link>
             );
