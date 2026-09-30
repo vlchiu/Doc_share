@@ -1,12 +1,20 @@
-const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const nodemailer = require('nodemailer');
 
-const FROM_EMAIL = process.env.EMAIL_USER || 'noreply@docshare.com';
+// Tạo transporter Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS, // App Password từ Google
+  },
+});
+
+const FROM_EMAIL = `"DocShare" <${process.env.EMAIL_USER}>`;
 
 const sendVerifyEmail = async (toEmail, name, otp) => {
-  await sgMail.send({
-    to: toEmail,
+  await transporter.sendMail({
     from: FROM_EMAIL,
+    to: toEmail,
     subject: '✅ Mã xác thực đăng ký DocShare',
     html: `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
@@ -30,9 +38,9 @@ const sendVerifyEmail = async (toEmail, name, otp) => {
 
 const sendResetPasswordEmail = async (toEmail, name, token) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-  await sgMail.send({
-    to: toEmail,
+  await transporter.sendMail({
     from: FROM_EMAIL,
+    to: toEmail,
     subject: '🔑 Đặt lại mật khẩu DocShare',
     html: `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
@@ -55,9 +63,9 @@ const sendResetPasswordEmail = async (toEmail, name, token) => {
 };
 
 const sendVIPConfirmEmail = async (toEmail, name, planMonths, expiresAt) => {
-  await sgMail.send({
-    to: toEmail,
+  await transporter.sendMail({
     from: FROM_EMAIL,
+    to: toEmail,
     subject: '💎 Tài khoản VIP đã được kích hoạt!',
     html: `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
