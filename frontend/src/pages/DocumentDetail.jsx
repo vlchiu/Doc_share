@@ -709,9 +709,7 @@ function DocumentDetail() {
       </div>
 
       {/* ── AI COPILOT CHAT BOX ── */}
-      {isAuthenticated && (
-        <ChatBox documentId={parseInt(id)} documentTitle={doc.title} />
-      )}
+      <ChatBox documentId={parseInt(id)} documentTitle={doc?.title} isAuthenticated={isAuthenticated} />
     </>
   );
 }

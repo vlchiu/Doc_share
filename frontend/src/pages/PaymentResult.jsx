@@ -1,11 +1,18 @@
+import { useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Home } from 'lucide-react';
 
-function PaymentResult() {
+function PaymentResult({ onPaymentSuccess }) {
   const [searchParams] = useSearchParams();
   const status = searchParams.get('status');
   const success = status === 'success';
+
+  useEffect(() => {
+    if (success && typeof onPaymentSuccess === 'function') {
+      onPaymentSuccess();
+    }
+  }, [success, onPaymentSuccess]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center py-12 px-4 text-center">

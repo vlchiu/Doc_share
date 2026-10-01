@@ -419,7 +419,7 @@ function AppLayout({ user, setUser, refreshUser }) {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/vip" element={<ProtectedRoute user={user}><VIPUpgrade onVIPActivated={refreshUser} /></ProtectedRoute>} />
-          <Route path="/payment/result" element={<PaymentResult />} />
+          <Route path="/payment/result" element={<PaymentResult onPaymentSuccess={refreshUser} />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -522,6 +522,14 @@ function App() {
 
   useEffect(() => {
     fetchUser();
+
+    const handleFocus = () => {
+      if (localStorage.getItem('token')) {
+        fetchUser();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [isAuthenticated]); // eslint-disable-line
 
   return (

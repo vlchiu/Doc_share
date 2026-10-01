@@ -4,25 +4,21 @@ const fs = require('fs');
 const path = require('path');
 const { cloudinary } = require('../middleware/uploadMiddleware');
 
-// ── Helper: generate thumbnail URL từ Cloudinary ──────────────────────────────
+// ── Helper: generate thumbnail URL ───────────────────────────────────────────
 function generateThumbnailUrl(fileUrl, mimeType) {
-  if (!fileUrl || !fileUrl.includes('cloudinary.com')) return null;
+  if (!fileUrl) return null;
 
   try {
-    if (mimeType === 'application/pdf') {
-      // PDF: Cloudinary tự render trang 1 thành ảnh
-      // raw/upload → image/upload + pg_1 transformation
-      return fileUrl
-        .replace('/raw/upload/', '/image/upload/pg_1,w_400,h_560,c_fit,f_jpg,q_80/')
-        .replace(/\.[^/.]+$/, '.jpg');
-    }
-
     if (mimeType.startsWith('image/')) {
-      // Ảnh: thêm transformation resize
-      return fileUrl.replace('/image/upload/', '/image/upload/w_400,h_280,c_fill,q_80/');
+      // Ảnh — dùng trực tiếp, thêm Cloudinary transformation nếu là Cloudinary URL
+      if (fileUrl.includes('cloudinary.com')) {
+        return fileUrl.replace('/image/upload/', '/image/upload/w_400,h_280,c_fill,q_80/');
+      }
+      return fileUrl;
     }
 
-    return null; // DOCX, Excel, v.v. không generate được
+    // PDF, DOCX, v.v. — không generate thumbnail được trên free tier
+    return null;
   } catch {
     return null;
   }

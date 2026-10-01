@@ -1,113 +1,168 @@
 const prisma = require('../db');
 const axios = require('axios');
-const pdfParse = require('pdf-parse');
+const path = require('path');
+const fs = require('fs');
+const mammoth = require('mammoth');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Cache nội dung tài liệu
+// Cache nội dung tài liệu (TTL 15 phút)
 const docContentCache = new Map();
+
+// Helper: parse PDF buffer (hỗ trợ cả pdf-parse v1 & v2)
+async function parsePdfBuffer(buffer) {
+  try {
+    const pdfParseModule = require('pdf-parse');
+    if (typeof pdfParseModule === 'function') {
+      const res = await pdfParseModule(buffer);
+      return res.text || '';
+    } else if (pdfParseModule.PDFParse) {
+      const parser = new pdfParseModule.PDFParse(new Uint8Array(buffer));
+      await parser.load();
+      const res = await parser.getText();
+      return (typeof res === 'object' ? res?.text : res) || '';
+    }
+  } catch (err) {
+    console.error('Lỗi phân tích PDF:', err.message);
+  }
+  return '';
+}
+
+// Helper: Lấy Buffer file từ đĩa cục bộ hoặc URL
+async function getFileBuffer(fileUrl) {
+  if (!fileUrl) return null;
+
+  // 1. File cục bộ trên máy chủ
+  if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+    const cleanPath = fileUrl.replace(/^\/+/, '');
+    const localPath = path.isAbsolute(fileUrl) ? fileUrl : path.join(__dirname, '..', cleanPath);
+    if (fs.existsSync(localPath)) {
+      return fs.promises.readFile(localPath);
+    }
+    const uploadsPath = path.join(__dirname, '../uploads', path.basename(fileUrl));
+    if (fs.existsSync(uploadsPath)) {
+      return fs.promises.readFile(uploadsPath);
+    }
+  }
+
+  // 2. File từ URL bên ngoài (Cloudinary, ngrok, v.v.)
+  try {
+    const response = await axios.get(fileUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
+    return Buffer.from(response.data);
+  } catch (err) {
+    console.error('Lỗi tải file:', err.message);
+    return null;
+  }
+}
 
 // ── Extract text từ tài liệu ──────────────────────────────────────────────────
 async function extractDocumentText(doc) {
   const cacheKey = `${doc.id}`;
   if (docContentCache.has(cacheKey)) return docContentCache.get(cacheKey);
 
-  const fileUrl = doc.file_url?.startsWith('http')
-    ? doc.file_url
-    : `${process.env.BACKEND_URL}${doc.file_url}`;
-
   let text = '';
   try {
-    if (doc.file_type === 'application/pdf') {
-      const response = await axios.get(fileUrl, { responseType: 'arraybuffer', timeout: 15000 });
-      const pdfData = await pdfParse(Buffer.from(response.data));
-      text = pdfData.text?.slice(0, 25000) || '';
-    } else if (doc.file_type === 'text/plain') {
-      const response = await axios.get(fileUrl, { timeout: 10000 });
-      text = String(response.data).slice(0, 25000);
+    const buffer = await getFileBuffer(doc.file_url);
+    if (buffer) {
+      const fileType = (doc.file_type || '').toLowerCase();
+      const fileUrl = (doc.file_url || '').toLowerCase();
+
+      if (fileType.includes('pdf') || fileUrl.endsWith('.pdf')) {
+        text = await parsePdfBuffer(buffer);
+      } else if (
+        fileType.includes('word') ||
+        fileType.includes('officedocument') ||
+        fileUrl.endsWith('.docx')
+      ) {
+        const result = await mammoth.extractRawText({ buffer });
+        text = result.value || '';
+      } else if (
+        fileType.startsWith('text/') ||
+        ['.txt', '.md', '.json', '.csv', '.cpp', '.c', '.js', '.py', '.html', '.xml', '.java'].some(ext => fileUrl.endsWith(ext))
+      ) {
+        text = buffer.toString('utf8');
+      }
     }
   } catch (err) {
     console.error('Extract text error:', err.message);
   }
 
-  docContentCache.set(cacheKey, text);
-  setTimeout(() => docContentCache.delete(cacheKey), 10 * 60 * 1000);
-  return text;
+  // Giới hạn độ dài để tối ưu payload (30.000 ký tự)
+  const trimmed = (text || '').slice(0, 30000).trim();
+  docContentCache.set(cacheKey, trimmed);
+  setTimeout(() => docContentCache.delete(cacheKey), 15 * 60 * 1000);
+  return trimmed;
 }
 
-// ── Tavily Web Search ─────────────────────────────────────────────────────────
-async function webSearch(query) {
-  try {
-    const response = await axios.post(
-      'https://api.tavily.com/search',
-      {
-        api_key: process.env.TAVILY_API_KEY,
-        query,
-        search_depth: 'basic',
-        max_results: 5,
-        include_answer: true,
-      },
-      { timeout: 10000 }
-    );
+// ── Gọi Gemini API với cơ chế tự động thử model dự phòng ──────────────────────
+async function callGemini(systemPrompt, history, userMessage) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('NO_GEMINI_KEY');
 
-    const data = response.data;
-    let searchContext = '';
-    if (data.answer) searchContext += `Tóm tắt: ${data.answer}\n\n`;
-    if (data.results?.length) {
-      searchContext += 'Nguồn tham khảo:\n';
-      data.results.slice(0, 4).forEach((r, i) => {
-        searchContext += `${i + 1}. ${r.title}\n   ${r.content?.slice(0, 300)}...\n   URL: ${r.url}\n\n`;
-      });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  // Danh sách model ưu tiên theo độ khả dụng và tốc độ phản hồi
+  const candidateModels = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+  ];
+
+  // Chuẩn hóa lịch sử hội thoại cho Gemini: user -> model luân phiên, bắt đầu bằng user
+  const sanitizedHistory = [];
+  let lastRole = null;
+
+  for (const h of history.slice(-10)) {
+    const role = h.role === 'assistant' ? 'model' : 'user';
+    const text = typeof h.content === 'string' ? h.content.trim() : '';
+    if (!text) continue;
+
+    if (sanitizedHistory.length === 0 && role !== 'user') {
+      continue;
     }
-    return searchContext;
-  } catch (err) {
-    console.error('Tavily search error:', err.message);
-    return null;
+
+    if (role === lastRole) {
+      sanitizedHistory[sanitizedHistory.length - 1].parts[0].text += `\n${text}`;
+    } else {
+      sanitizedHistory.push({
+        role,
+        parts: [{ text }]
+      });
+      lastRole = role;
+    }
   }
+
+  let lastError = null;
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPrompt,
+      });
+
+      const chat = model.startChat({
+        history: sanitizedHistory,
+      });
+
+      const result = await chat.sendMessage(userMessage);
+      const reply = result.response.text();
+      if (reply) return { reply, modelUsed: modelName };
+    } catch (err) {
+      console.warn(`Gemini model ${modelName} thất bại:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Tất cả model Gemini đều không phản hồi');
 }
 
-// ── Dùng AI để quyết định có cần search không và tạo query tối ưu ─────────────
-async function decideSearchQuery(message, currentDateTime) {
-  try {
-    const response = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content: `Bạn là bộ phân tích câu hỏi. Thời gian hiện tại: ${currentDateTime}.
-Nhiệm vụ: Xác định xem câu hỏi có cần tìm kiếm web để trả lời chính xác không.
-Cần search khi: hỏi về thời tiết, tin tức, giá cả, sự kiện hiện tại, thông tin mới nhất, ngày giờ cụ thể, kết quả thể thao, v.v.
-KHÔNG cần search khi: hỏi về kiến thức chung, lập trình, toán học, giải thích khái niệm, hỏi về tài liệu đang xem.
-Trả lời JSON: {"needSearch": true/false, "searchQuery": "câu query tối ưu bằng tiếng Anh nếu cần search, null nếu không"}
-Chỉ trả về JSON, không giải thích thêm.`
-          },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 100,
-        temperature: 0,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      }
-    );
-
-    const content = response.data.choices?.[0]?.message?.content || '{}';
-    // Lấy JSON từ response (đôi khi có text thừa)
-    const jsonMatch = content.match(/\{.*\}/s);
-    if (!jsonMatch) return { needSearch: false, searchQuery: null };
-    return JSON.parse(jsonMatch[0]);
-  } catch (err) {
-    console.error('Decide search error:', err.message);
-    return { needSearch: false, searchQuery: null };
-  }
-}
-
-// ── Gọi Groq API ─────────────────────────────────────────────────────────────
+// ── Fallback gọi Groq (nếu máy chủ cấu hình GROQ_API_KEY) ────────────────────
 async function callGroq(systemPrompt, history, userMessage) {
+  if (!process.env.GROQ_API_KEY) throw new Error('NO_GROQ_KEY');
+
   const messages = [
     { role: 'system', content: systemPrompt },
     ...history.slice(-10).map(h => ({
@@ -130,11 +185,14 @@ async function callGroq(systemPrompt, history, userMessage) {
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      timeout: 30000,
+      timeout: 25000,
     }
   );
 
-  return response.data.choices?.[0]?.message?.content || 'Không có phản hồi';
+  return {
+    reply: response.data.choices?.[0]?.message?.content || 'Không có phản hồi',
+    modelUsed: 'llama-3.3-70b-versatile'
+  };
 }
 
 // ── [POST] /api/chat/:docId ───────────────────────────────────────────────────
@@ -143,8 +201,26 @@ const chatWithDocument = async (req, res) => {
     const { docId } = req.params;
     const { message, history = [] } = req.body;
 
-    if (!message?.trim()) {
+    if (!message || !message.trim()) {
       return res.status(400).json({ message: 'Vui lòng nhập câu hỏi' });
+    }
+
+    const docIdNum = parseInt(docId);
+    if (isNaN(docIdNum)) {
+      return res.status(400).json({ message: 'Mã tài liệu không hợp lệ' });
+    }
+
+    // Lấy thông tin tài liệu
+    const doc = await prisma.document.findUnique({
+      where: { id: docIdNum },
+      include: {
+        user: { select: { name: true } },
+        category: { select: { name: true } }
+      }
+    });
+
+    if (!doc) {
+      return res.status(404).json({ message: 'Không tìm thấy tài liệu này' });
     }
 
     // Thời gian hiện tại Việt Nam
@@ -155,62 +231,65 @@ const chatWithDocument = async (req, res) => {
       day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
 
-    // 1. Lấy context tài liệu và quyết định search — chạy song song
-    const [docResult, searchDecision] = await Promise.all([
-      // Lấy context tài liệu
-      (async () => {
-        try {
-          const doc = await prisma.document.findUnique({
-            where: { id: parseInt(docId) },
-            include: { user: { select: { name: true } }, category: true },
-          });
-          if (!doc) return '';
-          const docText = await extractDocumentText(doc);
-          return `
+    // Trích xuất nội dung văn bản từ file tài liệu
+    const docText = await extractDocumentText(doc);
+
+    // System prompt chuyên sâu
+    const systemPrompt = `Bạn là DocShare AI Copilot - Trợ lý trí tuệ nhân tạo chuyên biệt trên nền tảng DocShare.
+Nhiệm vụ của bạn là hỗ trợ người dùng đọc hiểu, tóm tắt, phân tích và giải đáp mọi thắc mắc liên quan đến tài liệu đang xem.
+
 THÔNG TIN TÀI LIỆU ĐANG XEM:
 - Tiêu đề: ${doc.title}
-- Mô tả: ${doc.description || 'Không có'}
-- Danh mục: ${doc.category?.name || ''}
-- Loại: ${doc.doc_type}
-- Tác giả: ${doc.user?.name}
-- Loại file: ${doc.file_type}
-${docText ? `\nNỘI DUNG TÀI LIỆU:\n${docText}` : '\n(Không thể đọc nội dung file này)'}
-`;
-        } catch { return ''; }
-      })(),
-      // AI quyết định có cần search không
-      decideSearchQuery(message.trim(), currentDateTime),
-    ]);
+- Danh mục: ${doc.category?.name || 'Tài liệu chung'}
+- Tác giả chia sẻ: ${doc.user?.name || 'Ẩn danh'}
+- Loại tài liệu: ${doc.doc_type || 'Tài liệu'}
+- Mô tả tóm tắt: ${doc.description || 'Không có mô tả'}
+${docText ? `\nNỘI DUNG VĂN BẢN TRÍCH XUẤT TỪ FILE:\n"""\n${docText}\n"""` : '\n(Không thể đọc trực tiếp nội dung chi tiết từ định dạng file này, hãy trả lời dựa trên tiêu đề, mô tả và kiến thức liên quan).'}
 
-    const docContext = docResult;
+NGUYÊN TẮC TRẢ LỜI:
+1. Luôn trả lời bằng tiếng Việt tự nhiên, súc tích, chuyên nghiệp và có chiều sâu.
+2. Trình bày bằng Markdown đẹp mắt: sử dụng tiêu đề nhỏ, in đậm, danh sách bullet hoặc bảng biểu khi cần.
+3. Nếu người dùng yêu cầu tóm tắt tài liệu: tóm lược ngắn gọn các ý chính, khái niệm cốt lõi và kết luận thực tiễn.
+4. Thời gian hiện tại tại Việt Nam: ${currentDateTime}.`;
 
-    // 2. Thực hiện web search nếu AI quyết định cần
-    let searchContext = '';
-    if (searchDecision.needSearch && searchDecision.searchQuery) {
-      console.log(`🔍 AI decided to search: "${searchDecision.searchQuery}"`);
-      const results = await webSearch(searchDecision.searchQuery);
-      if (results) {
-        searchContext = `\nKẾT QUẢ TÌM KIẾM WEB (cập nhật mới nhất):\n${results}`;
+    let result = null;
+
+    // 1. Ưu tiên Gemini API
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        result = await callGemini(systemPrompt, history, message.trim());
+      } catch (geminiErr) {
+        console.error('Lỗi Gemini Copilot:', geminiErr.message);
       }
     }
 
-    // 3. Build system prompt
-    const systemPrompt = `Bạn là trợ lý AI thông minh tích hợp trong DocShare - nền tảng chia sẻ tài liệu.
-Bạn có thể trả lời MỌI câu hỏi: lập trình, khoa học, lịch sử, tin tức, thời tiết, thể thao, đời sống, v.v.
-Trả lời bằng tiếng Việt, rõ ràng, chi tiết và hữu ích.
-Nếu có kết quả web search, ưu tiên dùng thông tin đó và đề cập nguồn.
-THỜI GIAN HIỆN TẠI (Việt Nam): ${currentDateTime}
-${docContext ? `\nNgười dùng đang xem tài liệu sau, hỗ trợ về tài liệu này nếu được hỏi:\n${docContext}` : ''}
-${searchContext}`;
+    // 2. Dự phòng Groq API
+    if (!result && process.env.GROQ_API_KEY) {
+      try {
+        result = await callGroq(systemPrompt, history, message.trim());
+      } catch (groqErr) {
+        console.error('Lỗi Groq Copilot:', groqErr.message);
+      }
+    }
 
-    // 4. Gọi Groq sinh câu trả lời
-    const reply = await callGroq(systemPrompt, history, message.trim());
+    if (!result) {
+      return res.status(500).json({
+        message: 'AI Copilot hiện không thể phản hồi. Vui lòng kiểm tra GEMINI_API_KEY trên máy chủ backend.'
+      });
+    }
 
-    res.json({ reply });
+    res.json({
+      reply: result.reply,
+      modelUsed: result.modelUsed,
+      docTitle: doc.title
+    });
   } catch (error) {
-    console.error('Chat error:', error.response?.data || error.message);
-    res.status(500).json({ message: 'Lỗi AI: ' + (error.response?.data?.error?.message || error.message) });
+    console.error('Chat error:', error);
+    res.status(500).json({
+      message: 'Lỗi máy chủ khi xử lý câu hỏi AI. Vui lòng thử lại sau.'
+    });
   }
 };
 
 module.exports = { chatWithDocument };
+
