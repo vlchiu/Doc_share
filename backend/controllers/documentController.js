@@ -1,14 +1,39 @@
 // backend/controllers/documentController.js
 const prisma = require('../db');
-const fs = require('fs'); // Thư viện xử lý file (MỚI)
-const path = require('path'); // Thư viện xử lý đường dẫn (MỚI)
+const fs = require('fs');
+const path = require('path');
+const { cloudinary } = require('../middleware/uploadMiddleware');
+
+// ── Helper: generate thumbnail URL từ Cloudinary ──────────────────────────────
+function generateThumbnailUrl(fileUrl, mimeType) {
+  if (!fileUrl || !fileUrl.includes('cloudinary.com')) return null;
+
+  try {
+    if (mimeType === 'application/pdf') {
+      // PDF: Cloudinary tự render trang 1 thành ảnh
+      // raw/upload → image/upload + pg_1 transformation
+      return fileUrl
+        .replace('/raw/upload/', '/image/upload/pg_1,w_400,h_560,c_fit,f_jpg,q_80/')
+        .replace(/\.[^/.]+$/, '.jpg');
+    }
+
+    if (mimeType.startsWith('image/')) {
+      // Ảnh: thêm transformation resize
+      return fileUrl.replace('/image/upload/', '/image/upload/w_400,h_280,c_fill,q_80/');
+    }
+
+    return null; // DOCX, Excel, v.v. không generate được
+  } catch {
+    return null;
+  }
+}
 
 // [POST] Tải tài liệu lên
 const uploadDocument = async (req, res) => {
   try {
     const { title, description, category_id, doc_type } = req.body;
     const file = req.file;
-    const userId = req.user.userId; 
+    const userId = req.user.userId;
 
     // Validation
     if (!title || !title.trim()) return res.status(400).json({ message: "Tên tài liệu không được để trống" });
@@ -19,12 +44,16 @@ const uploadDocument = async (req, res) => {
     const VALID_DOC_TYPES = ['Chung', 'Hardware', 'Software', 'Thông báo'];
     const validDocType = VALID_DOC_TYPES.includes(doc_type) ? doc_type : 'Chung';
 
+    // Generate thumbnail URL
+    const thumbnailUrl = generateThumbnailUrl(req.file.path, req.file.mimetype);
+
     const newDoc = await prisma.document.create({
       data: {
         title: title.trim(),
         description: description?.trim() || null,
-        file_url: req.file.path,        // Cloudinary URL
+        file_url: req.file.path,
         file_type: req.file.mimetype,
+        thumbnail_url: thumbnailUrl,
         category_id: parseInt(category_id),
         user_id: userId,
         doc_type: validDocType

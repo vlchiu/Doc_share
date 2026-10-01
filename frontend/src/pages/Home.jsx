@@ -147,50 +147,76 @@ function DocCard({ doc, index }) {
       <Link to={`/documents/${doc.id}`} className="group block no-underline h-full">
         <article className="h-full flex flex-col rounded-2xl border border-slate-200/70 bg-white/80 hover:bg-white shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-200/80 transition-all duration-300 hover:-translate-y-1 overflow-hidden backdrop-blur-sm">
           {/* TOP PREVIEW AREA */}
-          <div className={`relative h-40 bg-gradient-to-br ${style.bg} p-4 flex flex-col justify-between border-b border-slate-100 overflow-hidden`}>
-            {/* Subtle background grid pattern */}
-            <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
-              style={{
-                backgroundImage: 'radial-gradient(circle at 1px 1px, #64748b 1px, transparent 0)',
-                backgroundSize: '16px 16px',
-              }}
-            />
+          <div className={`relative h-40 border-b border-slate-100 overflow-hidden ${!doc.thumbnail_url ? `bg-gradient-to-br ${style.bg} p-4 flex flex-col justify-between` : ''}`}>
 
-            {/* Badges bar */}
-            <div className="relative z-10 flex items-center justify-between">
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase border shadow-2xs backdrop-blur-md ${style.badge}`}>
-                {fileLabel}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold text-slate-600 bg-white/90 border border-slate-200/60 shadow-2xs backdrop-blur-md">
-                {doc.doc_type || 'Chung'}
-              </span>
-            </div>
-
-            {/* Document sheet representation */}
-            <div className="relative z-10 flex items-center justify-center my-auto">
-              <div className="w-20 h-24 rounded-lg bg-white shadow-md border border-slate-100 flex flex-col justify-between p-2.5 group-hover:scale-105 group-hover:-rotate-2 transition-transform duration-300">
-                <div className="flex items-center justify-between">
-                  <div className={`w-3.5 h-3.5 rounded flex items-center justify-center ${style.iconColor}`}>
-                    <FileText className="w-3.5 h-3.5" />
+            {doc.thumbnail_url ? (
+              /* ── Ảnh bìa thật từ Cloudinary ── */
+              <>
+                <img
+                  src={doc.thumbnail_url}
+                  alt={doc.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  onError={e => {
+                    // Fallback khi ảnh lỗi
+                    e.target.parentNode.classList.add(`bg-gradient-to-br`, style.bg, 'p-4', 'flex', 'flex-col', 'justify-between');
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                {/* Overlay gradient cho badges */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
+                {/* Badges */}
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase border shadow-sm backdrop-blur-md ${style.badge}`}>
+                    {fileLabel}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold text-slate-600 bg-white/90 border border-slate-200/60 shadow-sm backdrop-blur-md">
+                    {doc.doc_type || 'Chung'}
+                  </span>
+                </div>
+                {/* Category ở dưới */}
+                <div className="absolute bottom-2 left-3 z-10">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+                    {doc.category?.name || 'Tài liệu chung'}
+                  </span>
+                </div>
+              </>
+            ) : (
+              /* ── Fallback icon khi không có thumbnail ── */
+              <>
+                <div className="absolute inset-0 opacity-20 pointer-events-none"
+                  style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #64748b 1px, transparent 0)', backgroundSize: '16px 16px' }} />
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase border shadow-2xs backdrop-blur-md ${style.badge}`}>
+                    {fileLabel}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold text-slate-600 bg-white/90 border border-slate-200/60 shadow-2xs backdrop-blur-md">
+                    {doc.doc_type || 'Chung'}
+                  </span>
+                </div>
+                <div className="relative z-10 flex items-center justify-center my-auto">
+                  <div className="w-20 h-24 rounded-lg bg-white shadow-md border border-slate-100 flex flex-col justify-between p-2.5 group-hover:scale-105 group-hover:-rotate-2 transition-transform duration-300">
+                    <div className="flex items-center justify-between">
+                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center ${style.iconColor}`}>
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-[8px] font-bold text-slate-400">{fileLabel}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="h-1 w-full bg-slate-200 rounded-full" />
+                      <div className="h-1 w-4/5 bg-slate-100 rounded-full" />
+                      <div className="h-1 w-3/5 bg-slate-100 rounded-full" />
+                    </div>
+                    <div className="h-0.5 w-1/2 bg-indigo-200 rounded-full" />
                   </div>
-                  <span className="text-[8px] font-bold text-slate-400">{fileLabel}</span>
                 </div>
-                <div className="space-y-1.5">
-                  <div className="h-1 w-full bg-slate-200 rounded-full" />
-                  <div className="h-1 w-4/5 bg-slate-100 rounded-full" />
-                  <div className="h-1 w-3/5 bg-slate-100 rounded-full" />
+                <div className="relative z-10">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">
+                    {doc.category?.name || 'Tài liệu chung'}
+                  </span>
                 </div>
-                <div className="h-0.5 w-1/2 bg-indigo-200 rounded-full" />
-              </div>
-            </div>
-
-            {/* Category tag */}
-            <div className="relative z-10">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">
-                {doc.category?.name || 'Tài liệu chung'}
-              </span>
-            </div>
+              </>
+            )}
           </div>
 
           {/* CONTENT INFO */}

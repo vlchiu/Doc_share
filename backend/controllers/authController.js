@@ -226,9 +226,23 @@ const getMe = async (req, res) => {
       select: {
         id: true, name: true, email: true, role: true,
         avatar_url: true, created_at: true,
-        plan: true, plan_expires_at: true, monthly_downloads: true
+        plan: true, plan_expires_at: true, monthly_downloads: true,
+        download_reset_at: true
       }
     });
+
+    if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản" });
+
+    // Kiểm tra nếu tài khoản VIP đã hết hạn thì tự động cập nhật về FREE
+    const now = new Date();
+    if (user.plan === 'VIP' && user.plan_expires_at && user.plan_expires_at < now) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { plan: 'FREE' }
+      });
+      user.plan = 'FREE';
+    }
+
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: "Lỗi server" });

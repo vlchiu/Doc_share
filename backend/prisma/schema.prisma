@@ -50,6 +50,7 @@ model Document {
   description      String?
   file_url         String
   file_type        String
+  thumbnail_url    String?
   view_count       Int               @default(0)
   download_count   Int               @default(0)
   status           Status            @default(PENDING)
