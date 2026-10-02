@@ -1,10 +1,13 @@
 const express = require('express');
-const { chatWithDocument } = require('../controllers/chatController');
+const { chatWithDocument, chatGeneral } = require('../controllers/chatController');
 const { verifyToken } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Chat với tài liệu — yêu cầu đăng nhập
+// Chat chung — không gắn tài liệu cụ thể
+router.post('/general', verifyToken, chatGeneral);
+
+// Chat với tài liệu cụ thể
 router.post('/:docId', verifyToken, chatWithDocument);
 
 module.exports = router;

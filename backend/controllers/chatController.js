@@ -436,5 +436,62 @@ NGUYÊN TẮC TRẢ LỜI:
   }
 };
 
-module.exports = { chatWithDocument };
+// ── [POST] /api/chat/general ─────────────────────────────────────────────────
+const chatGeneral = async (req, res) => {
+  try {
+    const { message, history = [] } = req.body;
+
+    if (!message?.trim()) {
+      return res.status(400).json({ message: 'Vui lòng nhập câu hỏi' });
+    }
+
+    const now = new Date();
+    const currentDateTime = now.toLocaleString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      weekday: 'long', year: 'numeric', month: 'long',
+      day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+    const [liveWeather, liveKnowledge] = await Promise.all([
+      fetchLiveWeather(message.trim()),
+      fetchLiveKnowledge(message.trim()),
+    ]);
+
+    let liveDataSection = '';
+    if (liveWeather) liveDataSection += `\n${liveWeather}\n`;
+    if (liveKnowledge) liveDataSection += `\n${liveKnowledge}\n`;
+
+    const systemPrompt = `Bạn là DocShare AI Copilot - Trợ lý trí tuệ nhân tạo trên nền tảng DocShare.
+Bạn có thể trả lời MỌI câu hỏi: lập trình, khoa học, thời tiết, tin tức, đời sống, v.v.
+THỜI GIAN HIỆN TẠI (Việt Nam): ${currentDateTime}
+${liveDataSection ? `\nTHÔNG TIN THỰC TẾ THỜI GIAN THỰC:\n${liveDataSection}` : ''}
+NGUYÊN TẮC:
+1. Trả lời bằng tiếng Việt, rõ ràng, hữu ích.
+2. Dùng Markdown khi cần (tiêu đề, bullet, code block).
+3. Nếu hỏi về thời tiết/thời gian, dùng dữ liệu thực tế đã cung cấp.`;
+
+    let result = null;
+
+    if (process.env.GEMINI_API_KEY) {
+      try { result = await callGemini(systemPrompt, history, message.trim()); }
+      catch (e) { console.error('Gemini general error:', e.message); }
+    }
+
+    if (!result && process.env.GROQ_API_KEY) {
+      try { result = await callGroq(systemPrompt, history, message.trim()); }
+      catch (e) { console.error('Groq general error:', e.message); }
+    }
+
+    if (!result) {
+      return res.status(500).json({ message: 'AI hiện không thể phản hồi. Vui lòng thử lại sau.' });
+    }
+
+    res.json({ reply: result.reply, modelUsed: result.modelUsed });
+  } catch (error) {
+    console.error('General chat error:', error);
+    res.status(500).json({ message: 'Lỗi server. Vui lòng thử lại sau.' });
+  }
+};
+
+module.exports = { chatWithDocument, chatGeneral };
 

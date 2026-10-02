@@ -48,6 +48,7 @@ import PaymentResult from './pages/PaymentResult';
 import axiosClient from './api/axiosClient';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationBell from './components/NotificationBell';
+import GlobalChatBox from './components/GlobalChatBox';
 
 const NAV_TYPES = [
   { to: '/', label: 'Tất cả', icon: Layers },
@@ -503,6 +504,11 @@ function AppLayout({ user, setUser, refreshUser }) {
           </div>
         </div>
       </footer>
+
+      {/* GLOBAL AI CHATBOX — hiện ở mọi trang khi đã đăng nhập, ẩn khi đang ở trang tài liệu cụ thể */}
+      {isAuthenticated && !location.pathname.startsWith('/documents/') && (
+        <GlobalChatBox />
+      )}
     </div>
   );
 }
