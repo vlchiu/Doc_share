@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -266,6 +266,9 @@ function Home() {
   const [documents, setDocuments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef(null);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [fileType, setFileType] = useState('');
@@ -323,6 +326,28 @@ function Home() {
       .catch(() => {});
   }, []);
 
+  // ── Fetch suggestions khi gõ ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!debouncedSearch || debouncedSearch.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    axiosClient.get(`/documents/suggest?q=${encodeURIComponent(debouncedSearch)}`)
+      .then(res => setSuggestions(res.data || []))
+      .catch(() => setSuggestions([]));
+  }, [debouncedSearch]);
+
+  // Đóng suggestion khi click ra ngoài
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
   const handleApplyFilter = () => {
     setFileType(pendingFileType);
     setDateFrom(pendingDateFrom);
@@ -347,7 +372,7 @@ function Home() {
       {/* ── NEO-BENTO HERO SHOWCASE ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* HERO MAIN BENTO (Span 2) */}
-        <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-10 text-white shadow-xl flex flex-col justify-between border border-slate-800">
+        <div className="lg:col-span-2 relative rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-10 text-white shadow-xl flex flex-col justify-between border border-slate-800" style={{ overflow: 'visible' }}>
           {/* Ambient lighting glows */}
           <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none translate-y-1/2 -translate-x-1/2" />
@@ -380,31 +405,72 @@ function Home() {
           </div>
 
           {/* Interactive Search Bar in Hero */}
-          <div className="relative z-10 mt-8">
+          <div className="relative z-10 mt-8" ref={searchRef}>
             <div className="flex items-center rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-1.5 shadow-2xl focus-within:ring-2 focus-within:ring-indigo-400/80 transition-all">
               <Search className="ml-3 w-5 h-5 text-indigo-300 shrink-0" />
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 placeholder="Tìm tài liệu, chủ đề, mã môn học, tác giả..."
                 className="w-full bg-transparent px-3 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none"
               />
               {searchTerm && (
                 <button
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => { setSearchTerm(''); setSuggestions([]); setShowSuggestions(false); }}
                   className="p-1.5 text-slate-400 hover:text-white transition-colors bg-transparent border-0 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
               <button
-                onClick={() => fetchDocuments()}
+                onClick={() => { fetchDocuments(); setShowSuggestions(false); }}
                 className="px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md transition-all shrink-0 border-0 cursor-pointer hidden sm:block"
               >
                 Tìm kiếm
               </button>
             </div>
+
+            {/* AUTOCOMPLETE DROPDOWN */}
+            <AnimatePresence>
+              {showSuggestions && suggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200/80 overflow-hidden"
+                  style={{ zIndex: 9999, boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}
+                >
+                  {suggestions.map((s, i) => (
+                    <Link
+                      key={s.id}
+                      to={`/documents/${s.id}`}
+                      onClick={() => { setShowSuggestions(false); }}
+                      className={`flex items-center gap-3 px-4 py-3.5 no-underline hover:bg-indigo-50 transition-colors ${i < suggestions.length - 1 ? 'border-b border-slate-100' : ''}`}
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-indigo-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{s.title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{s.doc_type} · {getFileLabel(s.file_type, '')}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                    </Link>
+                  ))}
+                  <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 text-center">
+                    <button
+                      onClick={() => { fetchDocuments(); setShowSuggestions(false); }}
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-transparent border-0 cursor-pointer"
+                    >
+                      Xem tất cả kết quả cho &ldquo;{searchTerm}&rdquo;
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Quick search tags */}
             <div className="flex items-center gap-2 mt-3 flex-wrap text-xs text-slate-400">

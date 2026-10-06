@@ -25,6 +25,33 @@ router.get('/trash', verifyToken, getTrashDocuments);
 router.post('/upload', verifyToken, upload.single('file'), uploadDocument);
 router.delete('/comments/:commentId', verifyToken, deleteComment);
 
+// --- AUTOCOMPLETE SUGGEST ---
+router.get('/suggest', async (req, res) => {
+  try {
+    const { q = '' } = req.query;
+    const query = q.trim();
+    if (!query || query.length < 2) return res.json([]);
+
+    const prisma = require('../db');
+    const results = await prisma.document.findMany({
+      where: {
+        status: 'APPROVED',
+        deleted_at: null,
+        OR: [
+          { title: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } },
+        ]
+      },
+      select: { id: true, title: true, file_type: true, doc_type: true },
+      orderBy: { download_count: 'desc' },
+      take: 6,
+    });
+    res.json(results);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
 // --- PROXY: stream file từ Cloudinary về frontend (tránh CORS) ---
 router.get('/proxy-file/:id', async (req, res) => {
   try {
