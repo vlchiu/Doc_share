@@ -23,6 +23,21 @@ router.delete('/history/:historyId', verifyToken, deleteDownloadHistory);
 router.get('/user/:userId', getUserDocuments);
 router.get('/trash', verifyToken, getTrashDocuments);
 router.post('/upload', verifyToken, upload.single('file'), uploadDocument);
+
+// ── Error handler cho multer (v2 dùng next(err) thay vì throw) ───────────────
+// eslint-disable-next-line no-unused-vars
+router.use('/upload', (err, req, res, next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ message: 'File quá lớn! Giới hạn tối đa là 20MB.' });
+  }
+  if (err && err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({ message: 'Tên field file không hợp lệ. Vui lòng dùng field "file".' });
+  }
+  if (err) {
+    return res.status(400).json({ message: err.message || 'Lỗi khi tải file lên.' });
+  }
+  next();
+});
 router.delete('/comments/:commentId', verifyToken, deleteComment);
 
 // --- AUTOCOMPLETE SUGGEST ---

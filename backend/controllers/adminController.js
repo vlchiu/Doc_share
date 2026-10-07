@@ -131,4 +131,61 @@ const getStats = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, toggleUserActive, changeUserRole, getStats };
+// [GET] Lấy danh sách tài liệu đã được AI kiểm duyệt (Admin only)
+const getAiModeratedDocs = async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Không có quyền truy cập' });
+
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip   = (page - 1) * limit;
+    const filter = req.query.verdict || ''; // 'APPROVE' | 'REJECT' | 'PENDING' | ''
+
+    // Lấy tất cả tài liệu có ai_moderation_result khác null
+    const [docs, total] = await Promise.all([
+      prisma.document.findMany({
+        where: {
+          ai_moderation_result: { not: null },
+          deleted_at: null,
+        },
+        include: {
+          user:     { select: { id: true, name: true, email: true } },
+          category: { select: { id: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.document.count({
+        where: { ai_moderation_result: { not: null }, deleted_at: null },
+      }),
+    ]);
+
+    // Parse AI result và filter theo verdict nếu có
+    const parsed = docs
+      .map(doc => {
+        let aiResult = null;
+        try { if (doc.ai_moderation_result) aiResult = JSON.parse(doc.ai_moderation_result); } catch {}
+        return { ...doc, aiResult };
+      })
+      .filter(doc => !filter || doc.aiResult?.verdict === filter);
+
+    res.json({
+      docs: parsed,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      // Thống kê nhanh
+      summary: {
+        total,
+        approved: docs.filter(d => { try { return JSON.parse(d.ai_moderation_result)?.verdict === 'APPROVE'; } catch { return false; } }).length,
+        rejected: docs.filter(d => { try { return JSON.parse(d.ai_moderation_result)?.verdict === 'REJECT';  } catch { return false; } }).length,
+        pending:  docs.filter(d => { try { return JSON.parse(d.ai_moderation_result)?.verdict === 'PENDING'; } catch { return false; } }).length,
+      },
+    });
+  } catch (error) {
+    console.error('getAiModeratedDocs error:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};
+
+module.exports = { getAllUsers, toggleUserActive, changeUserRole, getStats, getAiModeratedDocs };
+

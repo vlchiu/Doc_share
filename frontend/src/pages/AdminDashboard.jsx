@@ -24,8 +24,30 @@ function AdminDashboard() {
   const [resolvingReport, setResolvingReport] = useState(null); // { id, docTitle }
   const [resolveAction, setResolveAction] = useState('WARN');
   const [resolveNote, setResolveNote] = useState('');
+  const [aiModerated, setAiModerated] = useState([]);
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiFilter, setAiFilter] = useState('');
+  const [aiPage, setAiPage] = useState(1);
+  const [aiPagination, setAiPagination] = useState({ total: 0, totalPages: 1 });
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => { fetchAll(); fetchUsers('', 1); }, []);
+
+  const fetchAiModerated = async (verdict = '', page = 1) => {
+    setAiLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 20, ...(verdict && { verdict }) });
+      const res = await axiosClient.get(`/admin/ai-moderated?${params}`);
+      setAiModerated(res.data.docs || []);
+      setAiSummary(res.data.summary || null);
+      setAiPagination(res.data.pagination || { total: 0, totalPages: 1 });
+    } catch { toast.error('Lỗi tải dữ liệu AI kiểm duyệt!'); }
+    finally { setAiLoading(false); }
+  };
+
+  useEffect(() => {
+    if (tab === 'ai') fetchAiModerated(aiFilter, aiPage);
+  }, [tab, aiFilter, aiPage]);
 
   const fetchUsers = async (search = '', page = 1) => {
     try {
@@ -235,6 +257,7 @@ function AdminDashboard() {
         <button style={tabStyle(tab === 'users')} onClick={() => setTab('users')}>👥 Quản lý User {stats?.totalUsers ? `(${stats.totalUsers})` : ''}</button>
         <button style={tabStyle(tab === 'categories')} onClick={() => setTab('categories')}>📁 Danh mục ({categories.length})</button>
         <button style={tabStyle(tab === 'reports')} onClick={() => setTab('reports')}>🚨 Báo cáo {reports.length > 0 && `(${reports.length})`}</button>
+        <button style={tabStyle(tab === 'ai')} onClick={() => setTab('ai')}>🤖 AI Kiểm duyệt</button>
         <button style={tabStyle(tab === 'trash')} onClick={() => setTab('trash')}>🗑️ Thùng rác {trashDocs.length > 0 && `(${trashDocs.length})`}</button>
         {stats?.topDocs?.length > 0 && (
           <button style={tabStyle(tab === 'top')} onClick={() => setTab('top')}>🏆 Top tài liệu</button>
@@ -255,17 +278,45 @@ function AdminDashboard() {
                       <th style={thStyle}>Tên tài liệu</th>
                       <th style={thStyle}>Người đăng</th>
                       <th style={thStyle}>Ngày tải lên</th>
+                      <th style={thStyle}>🤖 AI Kiểm duyệt</th>
                       <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingDocs.map(doc => (
+                    {pendingDocs.map(doc => {
+                      // Parse AI moderation result
+                      let aiResult = null;
+                      try { if (doc.ai_moderation_result) aiResult = JSON.parse(doc.ai_moderation_result); } catch {}
+
+                      const aiColor = aiResult?.verdict === 'APPROVE' ? '#16a34a' : aiResult?.verdict === 'REJECT' ? '#b91c1c' : '#d97706';
+                      const aiBg = aiResult?.verdict === 'APPROVE' ? '#dcfce7' : aiResult?.verdict === 'REJECT' ? '#fee2e2' : '#fef9c3';
+                      const aiIcon = aiResult?.verdict === 'APPROVE' ? '🤖✅' : aiResult?.verdict === 'REJECT' ? '🤖❌' : '🤖⏳';
+
+                      return (
                       <tr key={doc.id}>
                         <td style={{ ...tdStyle, fontWeight: 'bold' }}>
                           <a href={`${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{doc.title}</a>
                         </td>
                         <td style={tdStyle}>{doc.user?.name}</td>
                         <td style={tdStyle}>{new Date(doc.created_at).toLocaleDateString('vi-VN')}</td>
+                        {/* AI MODERATION RESULT */}
+                        <td style={{ ...tdStyle, maxWidth: '180px' }}>
+                          {aiResult ? (
+                            <div>
+                              <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: aiBg, color: aiColor }}>
+                                {aiIcon} {aiResult.verdict}
+                              </span>
+                              {aiResult.reason && (
+                                <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>{aiResult.reason}</p>
+                              )}
+                              {aiResult.confidence && (
+                                <p style={{ margin: '2px 0 0', fontSize: '10px', color: '#94a3b8' }}>Độ tin cậy: {Math.round(aiResult.confidence * 100)}%</p>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>⏳ Đang phân tích...</span>
+                          )}
+                        </td>
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                             <button onClick={() => handleApprove(doc.id)} style={{ padding: '7px 14px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✅ Duyệt</button>
@@ -274,7 +325,8 @@ function AdminDashboard() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )
@@ -454,6 +506,160 @@ function AdminDashboard() {
                   </tbody>
                 </table>
               )
+            )}
+
+            {/* TAB: AI KIỂM DUYỆT */}
+            {tab === 'ai' && (
+              <div>
+                {/* SUMMARY CARDS */}
+                {aiSummary && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                    {[
+                      { label: 'Tổng đã phân tích', value: aiSummary.total, icon: '🤖', bg: '#ede9fe', color: '#6d28d9' },
+                      { label: 'Tự động duyệt', value: aiSummary.approved, icon: '✅', bg: '#dcfce7', color: '#16a34a' },
+                      { label: 'Tự động từ chối', value: aiSummary.rejected, icon: '❌', bg: '#fee2e2', color: '#b91c1c' },
+                      { label: 'Chờ admin xét', value: aiSummary.pending, icon: '⏳', bg: '#fef9c3', color: '#d97706' },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: s.bg, padding: '14px 16px', borderRadius: '12px', textAlign: 'center', border: `1px solid ${s.bg}` }}>
+                        <div style={{ fontSize: '22px' }}>{s.icon}</div>
+                        <div style={{ fontSize: '22px', fontWeight: 'bold', color: s.color, lineHeight: 1.2 }}>{s.value}</div>
+                        <div style={{ fontSize: '11px', color: '#555', marginTop: '4px' }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* BỘ LỌC VERDICT */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>Lọc:</span>
+                  {[
+                    { value: '', label: 'Tất cả' },
+                    { value: 'APPROVE', label: '✅ Đã tự động duyệt' },
+                    { value: 'REJECT',  label: '❌ Đã tự động từ chối' },
+                    { value: 'PENDING', label: '⏳ Chờ admin' },
+                  ].map(f => (
+                    <button key={f.value} onClick={() => { setAiFilter(f.value); setAiPage(1); }}
+                      style={{ padding: '6px 14px', borderRadius: '20px', border: '1.5px solid', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', transition: '0.15s',
+                        background: aiFilter === f.value ? '#6d28d9' : '#f8fafc',
+                        color:      aiFilter === f.value ? '#fff'    : '#64748b',
+                        borderColor: aiFilter === f.value ? '#6d28d9' : '#e2e8f0',
+                      }}>{f.label}</button>
+                  ))}
+                  <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#94a3b8' }}>{aiPagination.total} tài liệu</span>
+                </div>
+
+                {/* BẢNG */}
+                {aiLoading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>⏳ Đang tải...</div>
+                ) : aiModerated.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#94a3b8', padding: '40px 0' }}>Chưa có tài liệu nào được AI phân tích.</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={thStyle}>Tài liệu</th>
+                          <th style={thStyle}>Người đăng</th>
+                          <th style={thStyle}>Danh mục</th>
+                          <th style={thStyle}>Ngày đăng</th>
+                          <th style={thStyle}>🤖 Kết quả AI</th>
+                          <th style={thStyle}>Lý do AI</th>
+                          <th style={thStyle}>Trạng thái TL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiModerated.map(doc => {
+                          const ai = doc.aiResult;
+                          const verdictColor  = ai?.verdict === 'APPROVE' ? '#16a34a' : ai?.verdict === 'REJECT' ? '#b91c1c' : '#d97706';
+                          const verdictBg     = ai?.verdict === 'APPROVE' ? '#dcfce7' : ai?.verdict === 'REJECT' ? '#fee2e2' : '#fef9c3';
+                          const verdictIcon   = ai?.verdict === 'APPROVE' ? '✅' : ai?.verdict === 'REJECT' ? '❌' : '⏳';
+                          const verdictLabel  = ai?.verdict === 'APPROVE' ? 'Tự động duyệt' : ai?.verdict === 'REJECT' ? 'Tự động từ chối' : 'Chờ admin';
+                          const statusColor   = doc.status === 'APPROVED' ? '#16a34a' : doc.status === 'REJECTED' ? '#b91c1c' : '#d97706';
+                          const statusBg      = doc.status === 'APPROVED' ? '#dcfce7' : doc.status === 'REJECTED' ? '#fee2e2' : '#fef9c3';
+                          const statusLabel   = doc.status === 'APPROVED' ? 'Đã duyệt' : doc.status === 'REJECTED' ? 'Đã từ chối' : 'Chờ duyệt';
+                          const conf = ai?.confidence != null ? Math.round(ai.confidence * 100) : null;
+
+                          return (
+                            <tr key={doc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              {/* Tên tài liệu */}
+                              <td style={{ ...tdStyle, maxWidth: '220px' }}>
+                                <a href={`/documents/${doc.id}`} target="_blank" rel="noopener noreferrer"
+                                  style={{ textDecoration: 'none', color: '#3b82f6', fontWeight: 'bold', fontSize: '13px',
+                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {doc.title}
+                                </a>
+                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>#{doc.id} · {doc.file_type?.split('/')[1]?.toUpperCase() || doc.file_type}</div>
+                              </td>
+
+                              {/* Người đăng */}
+                              <td style={{ ...tdStyle, fontSize: '13px' }}>
+                                <div style={{ fontWeight: 'bold', color: '#1a1a1a' }}>{doc.user?.name}</div>
+                                <div style={{ fontSize: '11px', color: '#94a3b8' }}>{doc.user?.email}</div>
+                              </td>
+
+                              {/* Danh mục */}
+                              <td style={{ ...tdStyle, fontSize: '12px', color: '#64748b' }}>{doc.category?.name || '—'}</td>
+
+                              {/* Ngày đăng */}
+                              <td style={{ ...tdStyle, fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                                {new Date(doc.created_at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+
+                              {/* Kết quả AI */}
+                              <td style={{ ...tdStyle, minWidth: '140px' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', background: verdictBg, color: verdictColor }}>
+                                  {verdictIcon} {verdictLabel}
+                                </span>
+                                {conf != null && (
+                                  <div style={{ marginTop: '5px' }}>
+                                    {/* Progress bar độ tin cậy */}
+                                    <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', width: '100%', maxWidth: '120px' }}>
+                                      <div style={{ height: '100%', width: `${conf}%`, background: verdictColor, borderRadius: '4px', transition: 'width 0.5s' }} />
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>Độ tin cậy: <b style={{ color: verdictColor }}>{conf}%</b></div>
+                                  </div>
+                                )}
+                                {ai?.model && (
+                                  <div style={{ fontSize: '10px', color: '#c4b5fd', marginTop: '2px', fontFamily: 'monospace' }}>🔬 {ai.model}</div>
+                                )}
+                              </td>
+
+                              {/* Lý do AI */}
+                              <td style={{ ...tdStyle, maxWidth: '200px', fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>
+                                {ai?.reason || <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span>}
+                              </td>
+
+                              {/* Trạng thái tài liệu hiện tại */}
+                              <td style={tdStyle}>
+                                <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', background: statusBg, color: statusColor }}>
+                                  {statusLabel}
+                                </span>
+                                {doc.reject_reason && (
+                                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '3px', maxWidth: '140px' }}
+                                    title={doc.reject_reason}>
+                                    {doc.reject_reason.slice(0, 60)}{doc.reject_reason.length > 60 ? '…' : ''}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* PAGINATION */}
+                {aiPagination.totalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
+                    <button onClick={() => setAiPage(p => Math.max(1, p - 1))} disabled={aiPage === 1}
+                      style={{ padding: '7px 14px', borderRadius: '7px', border: '1px solid #e2e8f0', background: aiPage === 1 ? '#f1f5f9' : '#fff', cursor: aiPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#555', fontSize: '13px' }}>← Trước</button>
+                    <span style={{ padding: '7px 14px', color: '#64748b', fontSize: '13px' }}>Trang {aiPage} / {aiPagination.totalPages}</span>
+                    <button onClick={() => setAiPage(p => Math.min(aiPagination.totalPages, p + 1))} disabled={aiPage === aiPagination.totalPages}
+                      style={{ padding: '7px 14px', borderRadius: '7px', border: '1px solid #e2e8f0', background: aiPage === aiPagination.totalPages ? '#f1f5f9' : '#fff', cursor: aiPage === aiPagination.totalPages ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#555', fontSize: '13px' }}>Sau →</button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* TAB: THÙNG RÁC */}

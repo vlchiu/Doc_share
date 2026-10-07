@@ -3,6 +3,7 @@ const prisma = require('../db');
 const fs = require('fs');
 const path = require('path');
 const { cloudinary } = require('../middleware/uploadMiddleware');
+const { moderateDocument } = require('../utils/aiModerator');
 
 // ── Helper: generate thumbnail URL ───────────────────────────────────────────
 function generateThumbnailUrl(fileUrl, mimeType) {
@@ -40,14 +41,17 @@ const uploadDocument = async (req, res) => {
     const VALID_DOC_TYPES = ['Chung', 'Hardware', 'Software', 'Thông báo'];
     const validDocType = VALID_DOC_TYPES.includes(doc_type) ? doc_type : 'Chung';
 
+    // Cloudinary trả về secure_url trong path hoặc secure_url
+    const fileUrl = req.file.secure_url || req.file.path;
+
     // Generate thumbnail URL
-    const thumbnailUrl = generateThumbnailUrl(req.file.path, req.file.mimetype);
+    const thumbnailUrl = generateThumbnailUrl(fileUrl, req.file.mimetype);
 
     const newDoc = await prisma.document.create({
       data: {
         title: title.trim(),
         description: description?.trim() || null,
-        file_url: req.file.path,
+        file_url: fileUrl,
         file_type: req.file.mimetype,
         thumbnail_url: thumbnailUrl,
         category_id: parseInt(category_id),
@@ -57,6 +61,94 @@ const uploadDocument = async (req, res) => {
     });
 
     res.status(201).json({ message: "Tải lên thành công chờ duyệt!", document: newDoc });
+
+    // ── AI Kiểm duyệt tự động (chạy background, không block response) ─────────
+    (async () => {
+      try {
+        // Extract text từ file để AI phân tích nội dung
+        let textContent = '';
+        try {
+          const axiosLib = require('axios');
+          const fileUrl = newDoc.file_url;
+          const mime = newDoc.file_type;
+
+          if (mime === 'application/pdf' && fileUrl?.startsWith('http')) {
+            // PDF → pdf-parse
+            const pdfParse = require('pdf-parse');
+            const resp = await axiosLib.get(fileUrl, { responseType: 'arraybuffer', timeout: 20000 });
+            const pdfData = await pdfParse(Buffer.from(resp.data));
+            textContent = (pdfData.text || '').slice(0, 3000);
+
+          } else if (
+            (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+             mime === 'application/msword') &&
+            fileUrl?.startsWith('http')
+          ) {
+            // DOCX / DOC → mammoth
+            const mammoth = require('mammoth');
+            const resp = await axiosLib.get(fileUrl, { responseType: 'arraybuffer', timeout: 20000 });
+            const result = await mammoth.extractRawText({ buffer: Buffer.from(resp.data) });
+            textContent = (result.value || '').slice(0, 3000);
+
+          } else if (mime === 'text/plain' && fileUrl?.startsWith('http')) {
+            // TXT → đọc trực tiếp
+            const resp = await axiosLib.get(fileUrl, { responseType: 'text', timeout: 10000 });
+            textContent = (resp.data || '').slice(0, 3000);
+          }
+        } catch (extractErr) {
+          console.warn('Text extraction skipped:', extractErr.message);
+        }
+
+        const modResult = await moderateDocument({
+          title: newDoc.title,
+          description: newDoc.description,
+          docType: newDoc.doc_type,
+          fileType: newDoc.file_type,
+          textContent,
+        });
+
+        // Cập nhật kết quả AI vào DB
+        const updateData = {
+          ai_moderation_result: JSON.stringify(modResult),
+        };
+
+        // Nếu AI tự tin APPROVE → tự động duyệt
+        if (modResult.verdict === 'APPROVE' && modResult.confidence >= 0.85) {
+          updateData.status = 'APPROVED';
+          console.log(`✅ Auto-approved doc ${newDoc.id}: ${newDoc.title}`);
+          // Gửi notification cho user
+          prisma.notification.create({
+            data: {
+              user_id: userId,
+              content: `✅ Tài liệu "${newDoc.title}" đã được AI kiểm duyệt và tự động duyệt!`,
+              link: `/documents/${newDoc.id}`
+            }
+          }).catch(() => {});
+        }
+
+        // Nếu AI tự tin REJECT → tự động từ chối
+        if (modResult.verdict === 'REJECT' && modResult.confidence >= 0.9) {
+          updateData.status = 'REJECTED';
+          updateData.reject_reason = `[AI Kiểm duyệt] ${modResult.reason}`;
+          console.log(`❌ Auto-rejected doc ${newDoc.id}: ${modResult.reason}`);
+          // Gửi notification cho user
+          prisma.notification.create({
+            data: {
+              user_id: userId,
+              content: `❌ Tài liệu "${newDoc.title}" bị từ chối tự động. Lý do: ${modResult.reason}`,
+              link: `/my-documents`
+            }
+          }).catch(() => {});
+        }
+
+        await prisma.document.update({
+          where: { id: newDoc.id },
+          data: updateData,
+        });
+      } catch (err) {
+        console.error('AI moderation error:', err.message);
+      }
+    })();
 
     // Thông báo cho những người đang follow user này
     prisma.follow.findMany({
@@ -78,14 +170,22 @@ const uploadDocument = async (req, res) => {
       });
     }).catch(() => {});
   } catch (error) {
-    // Xóa file đã upload nếu tạo document thất bại
+    // Xóa file trên Cloudinary nếu tạo document thất bại (upload đã xong nhưng DB lỗi)
     if (req.file) {
-      const filePath = path.join(__dirname, '..', 'uploads', req.file.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      const uploadedUrl = req.file.secure_url || req.file.path || '';
+      if (uploadedUrl.includes('cloudinary.com')) {
+        try {
+          const urlParts = uploadedUrl.split('/');
+          const publicIdWithExt = urlParts.slice(urlParts.indexOf('docshare')).join('/');
+          const publicId = publicIdWithExt.replace(/\.[^/.]+$/, '');
+          cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => {});
+        } catch {}
+      }
     }
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: "File quá lớn! Giới hạn tối đa là 20MB." });
     }
+    console.error('uploadDocument error:', error);
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
