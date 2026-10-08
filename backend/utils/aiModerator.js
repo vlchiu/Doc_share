@@ -32,10 +32,16 @@ Nhiệm vụ: Phân tích tài liệu dưới đây và đưa ra quyết định
 THÔNG TIN TÀI LIỆU:
 ${contentSummary}
 
+LƯU Ý QUAN TRỌNG:
+- Người dùng có thể điền mô tả giả mạo để qua kiểm duyệt
+- Nếu có "Nội dung trích đoạn", hãy ưu tiên phân tích phần đó, KHÔNG tin hoàn toàn vào mô tả
+- Nếu nội dung file mâu thuẫn với mô tả → REJECT hoặc PENDING
+- Nếu không có nội dung file (chỉ có tiêu đề/mô tả) → trả về PENDING thay vì APPROVE
+
 TIÊU CHÍ ĐÁNH GIÁ:
-- APPROVE: Tài liệu phù hợp (học thuật, kỹ thuật, báo cáo, hướng dẫn, code, tài liệu công việc)
-- PENDING: Nội dung không rõ ràng, cần admin xem xét thêm
-- REJECT: Tài liệu vi phạm (nội dung người lớn, bạo lực, quảng cáo spam, thông tin cá nhân nhạy cảm, vi phạm bản quyền rõ ràng)
+- APPROVE: Tài liệu rõ ràng phù hợp (học thuật, kỹ thuật, báo cáo, hướng dẫn, code, tài liệu công việc) VÀ đã xác minh được qua nội dung thực tế
+- PENDING: Không có nội dung để xác minh, hoặc nội dung không rõ ràng, cần admin xem xét
+- REJECT: Tài liệu vi phạm rõ ràng (bạo lực, nội dung người lớn, spam, thông tin cá nhân nhạy cảm, lừa đảo)
 
 Hãy trả lời ĐÚNG theo định dạng JSON sau, KHÔNG có text thêm:
 {

@@ -73,11 +73,20 @@ const uploadDocument = async (req, res) => {
           const mime = newDoc.file_type;
 
           if (mime === 'application/pdf' && fileUrl?.startsWith('http')) {
-            // PDF → pdf-parse
-            const pdfParse = require('pdf-parse');
+            // PDF → hỗ trợ cả pdf-parse v1 và v2
+            const pdfParseModule = require('pdf-parse');
             const resp = await axiosLib.get(fileUrl, { responseType: 'arraybuffer', timeout: 20000 });
-            const pdfData = await pdfParse(Buffer.from(resp.data));
-            textContent = (pdfData.text || '').slice(0, 3000);
+            const buf = Buffer.from(resp.data);
+            if (typeof pdfParseModule === 'function') {
+              const pdfData = await pdfParseModule(buf);
+              textContent = (pdfData.text || '').slice(0, 3000);
+            } else if (pdfParseModule.PDFParse) {
+              const parser = new pdfParseModule.PDFParse(new Uint8Array(buf));
+              await parser.load();
+              const parsedRes = await parser.getText();
+              const rawText = (typeof parsedRes === 'object' ? parsedRes?.text : parsedRes) || '';
+              textContent = rawText.slice(0, 3000);
+            }
 
           } else if (
             (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -113,10 +122,11 @@ const uploadDocument = async (req, res) => {
         };
 
         // Nếu AI tự tin APPROVE → tự động duyệt
-        if (modResult.verdict === 'APPROVE' && modResult.confidence >= 0.85) {
+        // Tăng ngưỡng lên 0.92 và CHỈ auto-approve khi đã đọc được nội dung file
+        const hasTextContent = textContent && textContent.length > 100;
+        if (modResult.verdict === 'APPROVE' && modResult.confidence >= 0.92 && hasTextContent) {
           updateData.status = 'APPROVED';
           console.log(`✅ Auto-approved doc ${newDoc.id}: ${newDoc.title}`);
-          // Gửi notification cho user
           prisma.notification.create({
             data: {
               user_id: userId,
@@ -131,7 +141,6 @@ const uploadDocument = async (req, res) => {
           updateData.status = 'REJECTED';
           updateData.reject_reason = `[AI Kiểm duyệt] ${modResult.reason}`;
           console.log(`❌ Auto-rejected doc ${newDoc.id}: ${modResult.reason}`);
-          // Gửi notification cho user
           prisma.notification.create({
             data: {
               user_id: userId,
@@ -373,8 +382,10 @@ const updateDocument = async (req, res) => {
     if (description !== undefined) updateData.description = description?.trim() || null;
     if (category_id !== undefined) updateData.category_id = parseInt(category_id);
     if (file) {
-      updateData.file_url = `/uploads/${file.filename}`;
+      const fileUrl = file.secure_url || file.path;
+      updateData.file_url = fileUrl;
       updateData.file_type = file.mimetype;
+      updateData.thumbnail_url = generateThumbnailUrl(fileUrl, file.mimetype);
     }
 
     const updatedDoc = await prisma.document.update({

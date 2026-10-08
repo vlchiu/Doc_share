@@ -202,21 +202,44 @@ function DocumentDetail() {
     }
     try {
       await axiosClient.post(`/documents/${id}/download`);
-      const token = localStorage.getItem('token');
-      const proxyUrl = `${API_URL}/api/documents/proxy-file/${id}?token=${token}`;
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const ext = doc.file_url.split('/').pop().split('?')[0].split('.').pop();
-      const safeTitle = doc.title.replace(/[\/\\:*?"<>|]/g, '_').trim();
-      a.href = url;
-      a.download = `${safeTitle}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+
+      // Ưu tiên tải trực tiếp từ Cloudinary URL nếu có
+      const directUrl = doc.file_url?.startsWith('http') ? doc.file_url : null;
+
+      if (directUrl) {
+        // Tải trực tiếp từ Cloudinary
+        const res = await fetch(directUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ext = doc.file_url.split('/').pop().split('?')[0].split('.').pop();
+        const safeTitle = doc.title.replace(/[\/\\:*?"<>|]/g, '_').trim();
+        a.href = url;
+        a.download = `${safeTitle}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        // Fallback: dùng proxy cho file local cũ
+        const token = localStorage.getItem('token');
+        const proxyUrl = `${API_URL}/api/documents/proxy-file/${id}?token=${token}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ext = doc.file_url.split('/').pop().split('?')[0].split('.').pop();
+        const safeTitle = doc.title.replace(/[\/\\:*?"<>|]/g, '_').trim();
+        a.href = url;
+        a.download = `${safeTitle}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
+
       setDoc((d) => ({ ...d, download_count: (d.download_count || 0) + 1 }));
       toast.success('Bắt đầu tải xuống...');
     } catch (err) {
@@ -224,9 +247,7 @@ function DocumentDetail() {
         toast.error('Đã đạt giới hạn tải tháng này. Nâng cấp VIP để tải không giới hạn!', {
           duration: 4000,
         });
-        setTimeout(() => {
-          window.location.href = '/vip';
-        }, 2000);
+        setTimeout(() => { window.location.href = '/vip'; }, 2000);
       } else {
         toast.error('Lỗi khi tải file!');
       }
