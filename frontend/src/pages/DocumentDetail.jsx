@@ -53,9 +53,9 @@ function TextPreview({ url }) {
 }
 
 function PDFPreview({ url, docId }) {
-  const [mode, setMode] = useState('google');
+  const [mode, setMode] = useState('direct');
   const token = localStorage.getItem('token');
-  const proxyUrl = `${API_URL}/api/documents/proxy-file/${docId}?token=${token}`;
+  const proxyUrl = `${API_URL}/api/documents/proxy-file/${docId}${token ? `?token=${token}` : ''}`;
   const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 
   return (
@@ -63,8 +63,9 @@ function PDFPreview({ url, docId }) {
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 flex-wrap gap-2">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-800 border border-slate-700/60">
           {[
-            { id: 'google', label: 'Google Viewer' },
+            { id: 'direct', label: 'Trình xem Trực tiếp' },
             { id: 'proxy', label: 'Máy chủ Proxy' },
+            { id: 'google', label: 'Google Viewer' },
           ].map((m) => (
             <button
               key={m.id}
@@ -88,13 +89,28 @@ function PDFPreview({ url, docId }) {
           <ExternalLink className="w-3.5 h-3.5" /> Mở trong tab mới
         </a>
       </div>
-      <iframe
-        key={mode}
-        src={mode === 'google' ? googleViewerUrl : proxyUrl}
-        title="PDF Preview"
-        className="w-full border-0 block"
-        style={{ height: '720px' }}
-      />
+
+      <div className="w-full bg-slate-950" style={{ height: '760px' }}>
+        {mode === 'direct' ? (
+          <iframe
+            src={`${url}#toolbar=1&navpanes=0`}
+            title="PDF Direct Preview"
+            className="w-full h-full border-0 block bg-slate-900"
+          />
+        ) : mode === 'proxy' ? (
+          <iframe
+            src={`${proxyUrl}#toolbar=1&navpanes=0`}
+            title="PDF Proxy Preview"
+            className="w-full h-full border-0 block bg-slate-900"
+          />
+        ) : (
+          <iframe
+            src={googleViewerUrl}
+            title="Google Viewer"
+            className="w-full h-full border-0 block bg-white"
+          />
+        )}
+      </div>
     </div>
   );
 }
