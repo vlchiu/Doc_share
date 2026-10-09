@@ -59,7 +59,10 @@ function PDFPreview({ url, docId }) {
   const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+    <div 
+      className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 flex-wrap gap-2">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-800 border border-slate-700/60">
           {[
@@ -80,26 +83,24 @@ function PDFPreview({ url, docId }) {
             </button>
           ))}
         </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-indigo-400 hover:text-indigo-300 no-underline flex items-center gap-1.5 font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
-        >
-          <ExternalLink className="w-3.5 h-3.5" /> Mở trong tab mới
-        </a>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-amber-400/90 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-medium">
+            🔒 Chế độ chỉ đọc (Xem trước)
+          </span>
+        </div>
       </div>
 
       <div className="w-full bg-slate-950" style={{ height: '760px' }}>
         {mode === 'direct' ? (
           <iframe
-            src={`${url}#toolbar=1&navpanes=0`}
+            src={`${url}#toolbar=0&navpanes=0&scrollbar=1`}
             title="PDF Direct Preview"
             className="w-full h-full border-0 block bg-slate-900"
           />
         ) : mode === 'proxy' ? (
           <iframe
-            src={`${proxyUrl}#toolbar=1&navpanes=0`}
+            src={`${proxyUrl}#toolbar=0&navpanes=0&scrollbar=1`}
             title="PDF Proxy Preview"
             className="w-full h-full border-0 block bg-slate-900"
           />
@@ -201,13 +202,10 @@ function DocumentDetail() {
     }
     try {
       await axiosClient.post(`/documents/${id}/view`);
-      openOrDownload(
-        `${API_URL}${doc.file_url}`,
-        doc.file_type,
-        doc.file_url.split('/').pop(),
-        handleDownload
-      );
       setDoc((d) => ({ ...d, view_count: (d.view_count || 0) + 1 }));
+      toast('Định dạng này không hỗ trợ xem trực tuyến. Vui lòng bấm "Tải về máy"!', {
+        icon: 'ℹ️',
+      });
     } catch {}
   };
 

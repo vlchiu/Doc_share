@@ -90,7 +90,9 @@ router.get('/proxy-file/:id', async (req, res) => {
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
 
-    res.setHeader('Content-Type', doc.file_type || 'application/octet-stream');
+    const fileName = encodeURIComponent(doc.title.replace(/[\/\\:*?"<>|]/g, '_')) || 'document';
+    res.setHeader('Content-Type', doc.file_type || 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}.pdf"`);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     response.data.pipe(res);
