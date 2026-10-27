@@ -1,0 +1,10 @@
+# Database backups belong outside the source repository.
+# Already-tracked files (including backup.sql) require a separate Git cleanup.
+/backup.sql
+/backups/
+*.dump
+*.backup
+*.bak
+.env
+.env.*
+!.env.example

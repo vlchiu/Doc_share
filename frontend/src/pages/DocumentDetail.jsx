@@ -30,91 +30,12 @@ import {
 
 import axiosClient from '../api/axiosClient';
 import Spinner from '../components/Spinner';
-import { openOrDownload, getFileLabel } from '../utils/fileHelper';
+import { getFileLabel } from '../utils/fileHelper';
 import StarRating from '../components/StarRating';
 import ChatBox from '../components/ChatBox';
+import SecureDocumentPreview from '../components/SecureDocumentPreview';
 
 const API_URL = import.meta.env.VITE_API_URL;
-
-function TextPreview({ url }) {
-  const [text, setText] = useState('');
-  useEffect(() => {
-    fetch(url)
-      .then((r) => r.text())
-      .then(setText)
-      .catch(() => setText('Không thể tải nội dung file.'));
-  }, [url]);
-
-  return (
-    <pre className="m-0 p-6 bg-slate-900 text-slate-200 text-xs font-mono leading-relaxed overflow-x-auto max-h-[600px] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-800">
-      {text || 'Đang tải nội dung văn bản...'}
-    </pre>
-  );
-}
-
-function PDFPreview({ url, docId }) {
-  const [mode, setMode] = useState('direct');
-  const token = localStorage.getItem('token');
-  const proxyUrl = `${API_URL}/api/documents/proxy-file/${docId}${token ? `?token=${token}` : ''}`;
-  const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
-
-  return (
-    <div 
-      className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl select-none"
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 flex-wrap gap-2">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-800 border border-slate-700/60">
-          {[
-            { id: 'direct', label: 'Trình xem Trực tiếp' },
-            { id: 'proxy', label: 'Máy chủ Proxy' },
-            { id: 'google', label: 'Google Viewer' },
-          ].map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMode(m.id)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold border-0 cursor-pointer transition-all ${
-                mode === m.id
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-amber-400/90 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-medium">
-            🔒 Chế độ chỉ đọc (Xem trước)
-          </span>
-        </div>
-      </div>
-
-      <div className="w-full bg-slate-950" style={{ height: '760px' }}>
-        {mode === 'direct' ? (
-          <iframe
-            src={`${url}#toolbar=0&navpanes=0&scrollbar=1`}
-            title="PDF Direct Preview"
-            className="w-full h-full border-0 block bg-slate-900"
-          />
-        ) : mode === 'proxy' ? (
-          <iframe
-            src={`${proxyUrl}#toolbar=0&navpanes=0&scrollbar=1`}
-            title="PDF Proxy Preview"
-            className="w-full h-full border-0 block bg-slate-900"
-          />
-        ) : (
-          <iframe
-            src={googleViewerUrl}
-            title="Google Viewer"
-            className="w-full h-full border-0 block bg-white"
-          />
-        )}
-      </div>
-    </div>
-  );
-}
 
 function ActionBtn({ onClick, className, children, disabled }) {
   return (
@@ -147,6 +68,8 @@ function DocumentDetail() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setDoc(null);
+      setShowPreview(false);
       try {
         const docRes = await axiosClient.get(`/documents/${id}`);
         setDoc(docRes.data);
@@ -215,46 +138,18 @@ function DocumentDetail() {
       return;
     }
     try {
-      await axiosClient.post(`/documents/${id}/download`);
+      const response = await axiosClient.post(`/documents/${id}/download`, {}, { responseType: 'blob', headers: { 'X-Delivery-ID': crypto.randomUUID() } });
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      const extension = getFileLabel(doc.file_type).toLowerCase();
+      a.href = url;
+      a.download = `${doc.title.replace(/[\\/:*?"<>|]/g, '_').trim()}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      // Ưu tiên tải trực tiếp từ Cloudinary URL nếu có
-      const directUrl = doc.file_url?.startsWith('http') ? doc.file_url : null;
-
-      if (directUrl) {
-        // Tải trực tiếp từ Cloudinary
-        const res = await fetch(directUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const ext = doc.file_url.split('/').pop().split('?')[0].split('.').pop();
-        const safeTitle = doc.title.replace(/[\/\\:*?"<>|]/g, '_').trim();
-        a.href = url;
-        a.download = `${safeTitle}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } else {
-        // Fallback: dùng proxy cho file local cũ
-        const token = localStorage.getItem('token');
-        const proxyUrl = `${API_URL}/api/documents/proxy-file/${id}?token=${token}`;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const ext = doc.file_url.split('/').pop().split('?')[0].split('.').pop();
-        const safeTitle = doc.title.replace(/[\/\\:*?"<>|]/g, '_').trim();
-        a.href = url;
-        a.download = `${safeTitle}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      }
-
-      setDoc((d) => ({ ...d, download_count: (d.download_count || 0) + 1 }));
+      setDoc((d) => ({ ...d, download_count: Number(response.headers['x-download-count']) || d.download_count }));
       toast.success('Bắt đầu tải xuống...');
     } catch (err) {
       if (err.response?.data?.limitReached) {
@@ -354,7 +249,6 @@ function DocumentDetail() {
   }
 
   const fileLabel = getFileLabel(doc.file_type, doc.file_url);
-  const fileUrl = doc.file_url?.startsWith('http') ? doc.file_url : `${API_URL}${doc.file_url}`;
 
   return (
     <>
@@ -474,7 +368,7 @@ function DocumentDetail() {
                   }`}
                 >
                   <Eye className="w-4 h-4" />
-                  {showPreview ? 'Thu gọn xem trước' : 'Xem trực tuyến'}
+                  {showPreview ? 'Thu gọn xem trước' : currentUser?.id === doc.user_id || currentUser?.role === 'ADMIN' ? 'Xem trực tuyến' : 'Xem trực tuyến (1 lượt tải)'}
                 </ActionBtn>
               ) : (
                 <ActionBtn
@@ -540,31 +434,7 @@ function DocumentDetail() {
                   </button>
                 </div>
 
-                {doc.file_type === 'text/plain' ? (
-                  <TextPreview url={fileUrl} />
-                ) : doc.file_type.startsWith('image/') ? (
-                  <div className="p-6 text-center bg-slate-950 rounded-2xl border border-slate-800">
-                    <img
-                      src={fileUrl}
-                      alt={doc.title}
-                      className="max-w-full max-h-[600px] object-contain rounded-xl mx-auto shadow-xl"
-                    />
-                  </div>
-                ) : doc.file_type === 'application/pdf' ? (
-                  <PDFPreview url={fileUrl} docId={doc.id} />
-                ) : (
-                  <div className="p-8 text-center text-slate-300">
-                    <p className="text-xs mb-3">Không hỗ trợ xem trước định dạng này.</p>
-                    <a
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold no-underline inline-block"
-                    >
-                      Mở trong tab mới
-                    </a>
-                  </div>
-                )}
+                <SecureDocumentPreview key={`${id}:${doc.content_version}`} documentId={doc.id} fileType={doc.file_type} title={doc.title} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -744,7 +614,7 @@ function DocumentDetail() {
       </div>
 
       {/* ── AI COPILOT CHAT BOX ── */}
-      <ChatBox documentId={parseInt(id)} documentTitle={doc?.title} isAuthenticated={isAuthenticated} />
+      <ChatBox key={id} documentId={parseInt(id)} documentTitle={doc?.title} isAuthenticated={isAuthenticated} />
     </>
   );
 }

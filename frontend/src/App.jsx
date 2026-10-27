@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
@@ -517,14 +517,14 @@ function App() {
   const [user, setUser] = useState(null);
   const isAuthenticated = !!localStorage.getItem('token');
 
-  const fetchUser = () => {
+  const fetchUser = useCallback(() => {
     if (isAuthenticated) {
       axiosClient
         .get('/auth/me')
         .then((res) => setUser(res.data))
-        .catch(() => localStorage.removeItem('token'));
+        .catch(() => { /* Authentication failures are handled by axiosClient; preserve session on network errors. */ });
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     fetchUser();
@@ -536,7 +536,7 @@ function App() {
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [isAuthenticated]); // eslint-disable-line
+  }, [isAuthenticated, fetchUser]);
 
   return (
     <Router>

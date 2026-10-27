@@ -1,4 +1,5 @@
 const prisma = require('../db');
+const { serializable } = require('../utils/transaction');
 
 // [POST] Báo cáo tài liệu
 const reportDocument = async (req, res) => {
@@ -45,7 +46,7 @@ const getReports = async (req, res) => {
       where: { status: 'PENDING' },
       include: {
         user: { select: { name: true, email: true } },
-        document: { select: { id: true, title: true, file_url: true } }
+        document: { select: { id: true, title: true } }
       },
       orderBy: { created_at: 'desc' }
     });
@@ -67,43 +68,26 @@ const resolveReport = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng chọn biện pháp xử lý: WARN, REMOVE hoặc IGNORE" });
     }
 
-    const report = await prisma.report.findUnique({
-      where: { id: parseInt(id) },
-      include: { document: { select: { id: true, title: true, user_id: true } } }
+    const outcome = await serializable(async tx => {
+      const report = await tx.report.findUnique({ where: { id: Number(id) }, include: { document: true } });
+      if (!report) return 404;
+      if (report.status === 'RESOLVED') return 409;
+      const note = typeof admin_note === 'string' ? admin_note.trim().slice(0, 2000) : '';
+      if (action === 'REMOVE') {
+        await tx.document.update({ where: { id: report.document_id }, data: {
+          deleted_at: new Date(), removed_by_admin: true, content_version: { increment: 1 },
+        } });
+      }
+      await tx.report.updateMany({ where: { document_id: report.document_id, status: 'PENDING' },
+        data: { status: 'RESOLVED', action, admin_note: note || null } });
+      if (action !== 'IGNORE') await tx.notification.create({ data: {
+        user_id: report.document.user_id,
+        content: `${action === 'REMOVE' ? 'Tài liệu đã bị gỡ' : 'Cảnh báo tài liệu'}: "${report.document.title}".${note ? ' ' + note : ''}`,
+        link: action === 'REMOVE' ? '/my-documents' : `/documents/${report.document_id}`,
+      } });
+      return 200;
     });
-    if (!report) return res.status(404).json({ message: "Không tìm thấy báo cáo" });
-    if (report.status === 'RESOLVED') return res.status(400).json({ message: "Báo cáo này đã được xử lý rồi" });
-
-    // Thực hiện biện pháp
-    if (action === 'REMOVE' && report.document) {
-      await prisma.document.update({
-        where: { id: report.document.id },
-        data: { deleted_at: new Date() }
-      });
-      const noteText = admin_note?.trim() ? ` Ghi chú: "${admin_note.trim()}"` : '';
-      prisma.notification.create({
-        data: {
-          user_id: report.document.user_id,
-          content: `🚫 Tài liệu "${report.document.title}" đã bị gỡ xuống do vi phạm nội quy.${noteText}`,
-          link: '/my-documents'
-        }
-      }).catch(() => {});
-    } else if (action === 'WARN' && report.document) {
-      const noteText = admin_note?.trim() ? ` Ghi chú từ Admin: "${admin_note.trim()}"` : '';
-      prisma.notification.create({
-        data: {
-          user_id: report.document.user_id,
-          content: `⚠️ Tài liệu "${report.document.title}" của bạn bị báo cáo vi phạm. Vui lòng kiểm tra lại nội dung.${noteText}`,
-          link: `/documents/${report.document.id}`
-        }
-      }).catch(() => {});
-    }
-
-    // Đánh dấu tất cả báo cáo cùng tài liệu là đã xử lý
-    await prisma.report.updateMany({
-      where: { document_id: report.document?.id, status: 'PENDING' },
-      data: { status: 'RESOLVED', action, admin_note: admin_note?.trim() || null }
-    });
+    if (outcome !== 200) return res.status(outcome).json({ message: 'Báo cáo không tồn tại hoặc đã được xử lý.' });
 
     res.json({ message: "Đã xử lý báo cáo!", action });
   } catch (error) {

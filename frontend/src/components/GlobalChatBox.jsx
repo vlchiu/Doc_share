@@ -33,7 +33,7 @@ function GlobalChatBox() {
     try {
       const res = await axiosClient.post('/chat/general', {
         message: userMessage,
-        history: messages,
+        history: messages.slice(-10),
       });
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.reply }]);
     } catch (err) {

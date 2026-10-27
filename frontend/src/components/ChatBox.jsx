@@ -61,7 +61,7 @@ function ChatBox({ documentId, documentTitle, isAuthenticated }) {
     try {
       const res = await axiosClient.post(`/chat/${documentId}`, {
         message: textToSend,
-        history: messages,
+        history: messages.slice(-10),
       });
 
       setMessages((prev) => [

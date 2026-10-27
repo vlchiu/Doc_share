@@ -219,6 +219,7 @@ function Login() {
                 >
                   {resendLoading ? 'Đang gửi...' : 'Gửi lại email xác thực'}
                 </button>
+                <Link to={`/verify-email?email=${encodeURIComponent(email)}`} className="block font-bold underline">Nhập mã OTP</Link>
               </motion.div>
             )}
           </AnimatePresence>

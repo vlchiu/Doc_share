@@ -10,10 +10,11 @@ function GoogleAuthSuccess() {
     if (handled.current) return;
     handled.current = true;
 
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.hash.slice(1));
     const token = params.get('token');
     const userId = params.get('userId');
     const error = params.get('error');
+    window.history.replaceState(null, '', window.location.pathname);
 
     if (error || !token) {
       toast.error('Đăng nhập Google thất bại. Vui lòng thử lại!');

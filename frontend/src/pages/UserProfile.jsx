@@ -66,7 +66,7 @@ function UserProfile() {
         <div style={{ background: '#fff', padding: '0 32px 24px', display: 'flex', gap: '20px', alignItems: 'flex-end' }}>
           <div style={{ width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '28px', fontWeight: 'bold', flexShrink: 0, border: '4px solid #fff', marginTop: '-40px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
             {user.avatar_url
-              ? <img src={`${API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={user.avatar_url.startsWith('https://') ? user.avatar_url : `${API_URL}${user.avatar_url}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : user.name.charAt(0).toUpperCase()}
           </div>
           <div style={{ flex: 1, paddingBottom: '4px' }}>
@@ -144,7 +144,7 @@ function UserProfile() {
                   onMouseEnter={e => e.currentTarget.style.background = '#e0f2fe'}
                   onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
                   <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', flexShrink: 0 }}>
-                    {u.avatar_url ? <img src={`${API_URL}${u.avatar_url}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : u.name.charAt(0).toUpperCase()}
+                    {u.avatar_url ? <img src={u.avatar_url.startsWith('https://') ? u.avatar_url : `${API_URL}${u.avatar_url}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : u.name.charAt(0).toUpperCase()}
                   </div>
                   <span style={{ fontWeight: 'bold', color: '#1a1a1a', fontSize: '14px' }}>{u.name}</span>
                 </Link>

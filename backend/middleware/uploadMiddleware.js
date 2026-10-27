@@ -1,4 +1,5 @@
 const multer = require('multer');
+const crypto = require('crypto');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 
@@ -31,7 +32,7 @@ const MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
-    const isImage = file.mimetype.startsWith('image/');
+    const isAvatar = file.fieldname === 'avatar';
     const mimeToExt = {
       'application/pdf': 'pdf',
       'text/plain': 'txt',
@@ -51,11 +52,10 @@ const storage = new CloudinaryStorage({
     };
     const ext = mimeToExt[file.mimetype] || 'bin';
     return {
-      folder: 'docshare',
-      resource_type: isImage ? 'image' : 'raw',
-      type: 'upload',
-      access_mode: 'public',
-      public_id: `${Date.now()}.${ext}`,
+      folder: isAvatar ? 'docshare-avatars' : 'docshare',
+      resource_type: isAvatar ? 'image' : 'raw',
+      type: isAvatar ? 'upload' : 'authenticated',
+      public_id: `${crypto.randomUUID()}${isAvatar ? '' : '.' + ext}`,
       use_filename: false,
       unique_filename: false,
     };
@@ -74,3 +74,8 @@ const upload = multer({ storage, fileFilter, limits: { fileSize: MAX_SIZE } });
 
 module.exports = upload;
 module.exports.cloudinary = cloudinary;
+
+module.exports.avatarUpload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
+  if (['image/jpeg', 'image/png', 'image/gif'].includes(file.mimetype)) cb(null, true);
+  else cb(new Error('Ảnh đại diện phải là JPG, PNG hoặc GIF.'));
+} });

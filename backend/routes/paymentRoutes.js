@@ -1,15 +1,16 @@
 const express = require('express');
-const { createMomoPayment, momoIPN, createVNPayPayment, vnpayReturn, getPaymentHistory, getVIPPlans } = require('../controllers/paymentController');
+const { getPaymentHistory, getVIPPlans } = require('../controllers/paymentController');
 const { createSepayPayment, sepayWebhook, checkPaymentStatus } = require('../controllers/sepayController');
 const { verifyToken } = require('../middleware/authMiddleware');
 
 const router = express.Router();
+const unavailable = (req, res) => res.status(503).json({ message: 'Phương thức thanh toán này chưa được hỗ trợ.' });
 
 router.get('/plans', getVIPPlans);
-router.post('/momo/create', verifyToken, createMomoPayment);
-router.post('/momo/ipn', momoIPN);
-router.post('/vnpay/create', verifyToken, createVNPayPayment);
-router.get('/vnpay/return', vnpayReturn);
+router.post('/momo/create', unavailable);
+router.post('/momo/ipn', unavailable);
+router.post('/vnpay/create', unavailable);
+router.get('/vnpay/return', unavailable);
 
 // SePay
 router.post('/sepay/create', verifyToken, createSepayPayment);

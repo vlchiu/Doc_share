@@ -1,30 +1,35 @@
-// backend/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 const prisma = require('../db');
 
-const verifyToken = async (req, res, next) => {
-  const authHeader = req.header('Authorization');
-  if (!authHeader) return res.status(401).json({ message: "Từ chối truy cập! Không có token." });
-
+async function authenticate(req, res, next, optional = false) {
+  const header = req.get('Authorization');
+  if (!header && optional) return next();
+  const token = typeof header === 'string' && /^Bearer ([^\s]+)$/i.exec(header)?.[1];
+  if (!token) return res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Vui lòng đăng nhập.' });
+  let payload;
   try {
-    const token = authHeader.replace("Bearer ", "");
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Kiểm tra tài khoản có bị khóa không
-    const user = await prisma.user.findUnique({
-      where: { id: verified.userId },
-      select: { is_active: true, role: true }
-    });
-
-    if (!user || !user.is_active) {
-      return res.status(403).json({ message: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin." });
-    }
-
-    req.user = { ...verified, role: user.role };
-    next();
-  } catch (error) {
-    res.status(400).json({ message: "Token không hợp lệ hoặc đã hết hạn!" });
+    payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    if (!Number.isSafeInteger(payload.userId) || !Number.isSafeInteger(payload.tokenVersion)) throw new Error('Invalid claims');
+  } catch {
+    return res.status(401).json({ code: 'AUTH_INVALID', message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' });
   }
-};
+  try {
+    const user = await prisma.user.findUnique({ where: { id: payload.userId },
+      select: { id: true, role: true, is_active: true, is_email_verified: true, token_version: true } });
+    if (!user || user.token_version !== payload.tokenVersion) {
+      return res.status(401).json({ code: 'AUTH_INVALID', message: 'Vui lòng đăng nhập lại.' });
+    }
+    if (!user.is_active) return res.status(403).json({ code: 'ACCOUNT_DISABLED', message: 'Tài khoản đã bị khóa.' });
+    if (!user.is_email_verified) return res.status(403).json({ code: 'EMAIL_UNVERIFIED', message: 'Vui lòng xác thực email.' });
+    req.user = { userId: user.id, role: user.role, tokenVersion: user.token_version };
+    return next();
+  } catch (error) {
+    console.error('Authentication database error:', error.code || error.name);
+    return res.status(503).json({ code: 'AUTH_UNAVAILABLE', message: 'Chưa thể kiểm tra phiên đăng nhập. Vui lòng thử lại.' });
+  }
+}
 
-module.exports = { verifyToken };
+module.exports = {
+  verifyToken: (req, res, next) => authenticate(req, res, next),
+  optionalAuth: (req, res, next) => authenticate(req, res, next, true),
+};

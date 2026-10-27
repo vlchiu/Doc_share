@@ -87,7 +87,7 @@ function Profile() {
     formData.append('name', newName);
     if (selectedFile) formData.append('avatar', selectedFile);
     try {
-      await axiosClient.put('/auth/update-profile', formData);
+      await axiosClient.put('/auth/update-profile', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       toast.success('Cập nhật thông tin thành công!');
       window.location.reload();
     } catch (error) {

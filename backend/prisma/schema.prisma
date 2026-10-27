@@ -20,6 +20,8 @@ model User {
   email_verify_expires DateTime?
   email_verify_token   String?
   is_email_verified    Boolean           @default(false)
+  token_version        Int               @default(1)
+  email_verify_attempts Int              @default(0)
   monthly_downloads    Int               @default(0)
   plan                 Plan              @default(FREE)
   plan_expires_at      DateTime?
@@ -61,6 +63,8 @@ model Document {
   doc_type         String            @default("Chung")
   reject_reason    String?
   deleted_at       DateTime?
+  removed_by_admin Boolean           @default(false)
+  content_version  Int               @default(1)
   comments         Comment[]
   category         Category          @relation(fields: [category_id], references: [id])
   user             User              @relation(fields: [user_id], references: [id])
@@ -126,6 +130,8 @@ model Report {
 
 model DownloadHistory {
   id          Int      @id @default(autoincrement())
+  delivery_key String?  @unique
+  content_version Int?
   created_at  DateTime @default(now())
   user_id     Int
   document_id Int
@@ -160,6 +166,15 @@ model Payment {
 enum Plan {
   FREE
   VIP
+}
+
+model SepayReceipt {
+  id           String   @id
+  order_ref    String?
+  amount       Int
+  status       String
+  reason       String?
+  received_at  DateTime @default(now())
 }
 
 enum Role {

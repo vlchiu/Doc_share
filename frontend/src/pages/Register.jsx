@@ -45,12 +45,13 @@ function Register() {
     }
     setLoading(true);
     try {
-      await axiosClient.post('/auth/register', { name, email, password });
-      toast.success('Mã OTP đã được gửi về email của bạn!');
+      const response = await axiosClient.post('/auth/register', { name, email, password });
+      toast.success(response.message || response.data?.message || 'Vui lòng kiểm tra email để lấy mã OTP.');
       setStep(2);
       startCooldown();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra!');
+      if (error.response?.data?.needVerify) { setStep(2); toast('Hãy gửi lại OTP để tiếp tục xác thực.'); }
+      else toast.error(error.response?.data?.message || 'Có lỗi xảy ra!');
     } finally {
       setLoading(false);
     }

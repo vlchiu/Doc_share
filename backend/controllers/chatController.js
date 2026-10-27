@@ -1,4 +1,5 @@
 const prisma = require('../db');
+const { sourceForDocument } = require('../utils/documentStorage');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
@@ -60,12 +61,13 @@ async function getFileBuffer(fileUrl) {
 
 // ── Extract text từ tài liệu ──────────────────────────────────────────────────
 async function extractDocumentText(doc) {
-  const cacheKey = `${doc.id}`;
+  const cacheKey = `${doc.id}:${doc.content_version}`;
   if (docContentCache.has(cacheKey)) return docContentCache.get(cacheKey);
 
   let text = '';
   try {
-    const buffer = await getFileBuffer(doc.file_url);
+    const source = sourceForDocument(doc);
+    const buffer = source.path ? await fs.promises.readFile(source.path) : await getFileBuffer(source.url);
     if (buffer) {
       const fileType = (doc.file_type || '').toLowerCase();
       const fileUrl = (doc.file_url || '').toLowerCase();
@@ -332,7 +334,7 @@ const chatWithDocument = async (req, res) => {
     const { docId } = req.params;
     const { message, history = [] } = req.body;
 
-    if (!message || !message.trim()) {
+    if (typeof message !== 'string' || !message.trim() || message.length > 8000 || !Array.isArray(history) || history.length > 20 || history.some(h => !h || !['user', 'assistant'].includes(h.role) || typeof h.content !== 'string' || h.content.length > 16000)) {
       return res.status(400).json({ message: 'Vui lòng nhập câu hỏi' });
     }
 
@@ -441,7 +443,7 @@ const chatGeneral = async (req, res) => {
   try {
     const { message, history = [] } = req.body;
 
-    if (!message?.trim()) {
+    if (typeof message !== 'string' || !message.trim() || message.length > 8000 || !Array.isArray(history) || history.length > 20 || history.some(h => !h || !['user', 'assistant'].includes(h.role) || typeof h.content !== 'string' || h.content.length > 16000)) {
       return res.status(400).json({ message: 'Vui lòng nhập câu hỏi' });
     }
 

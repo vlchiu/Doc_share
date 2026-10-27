@@ -111,12 +111,15 @@ function Trash() {
               {/* ACTION BUTTONS */}
               <div className="flex gap-2 mt-5 pt-3 border-t border-slate-100">
                 <button
+                  disabled={doc.removed_by_admin}
+                  title={doc.removed_by_admin ? 'Chỉ quản trị viên được khôi phục tài liệu bị gỡ' : 'Khôi phục'}
                   onClick={() => handleRestore(doc.id)}
                   className="flex-1 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5" /> Khôi phục
                 </button>
                 <button
+                  disabled={doc.removed_by_admin}
                   onClick={() => handlePermanentDelete(doc.id)}
                   className="flex-1 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >

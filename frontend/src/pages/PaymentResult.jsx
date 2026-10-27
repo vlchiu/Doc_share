@@ -1,18 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import axiosClient from '../api/axiosClient';
 import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Home } from 'lucide-react';
 
 function PaymentResult({ onPaymentSuccess }) {
   const [searchParams] = useSearchParams();
-  const status = searchParams.get('status');
-  const success = status === 'success';
-
+  const orderId = searchParams.get('orderId');
+  const [status, setStatus] = useState('PENDING');
+  const success = status === 'SUCCESS';
   useEffect(() => {
-    if (success && typeof onPaymentSuccess === 'function') {
-      onPaymentSuccess();
-    }
-  }, [success, onPaymentSuccess]);
+    let cancelled = false;
+    if (!orderId) return;
+    axiosClient.get(`/payment/sepay/status/${encodeURIComponent(orderId)}`).then(({ data }) => {
+      if (!cancelled) {
+        setStatus(data.status);
+        if (data.status === 'SUCCESS') onPaymentSuccess?.();
+      }
+    }).catch(() => { if (!cancelled) setStatus('UNKNOWN'); });
+    return () => { cancelled = true; };
+  }, [orderId, onPaymentSuccess]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center py-12 px-4 text-center">
@@ -33,12 +40,12 @@ function PaymentResult({ onPaymentSuccess }) {
 
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-            {success ? 'Thanh toán thành công!' : 'Thanh toán thất bại'}
+            {success ? 'Thanh toán thành công!' : 'Chưa xác nhận thanh toán'}
           </h2>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             {success
               ? 'Tài khoản VIP của bạn đã được nâng cấp và kích hoạt tự động. Mọi giới hạn tải về đã được dỡ bỏ.'
-              : 'Giao dịch chưa được hoàn tất hoặc đã bị hủy. Bạn có thể thử lại hoặc chọn phương thức khác.'}
+              : 'Chưa có xác nhận từ máy chủ. Hãy kiểm tra đơn SePay trước khi thanh toán lại.'}
           </p>
         </div>
 

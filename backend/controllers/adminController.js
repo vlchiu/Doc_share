@@ -1,4 +1,6 @@
+const { serializable } = require('../utils/transaction');
 const prisma = require('../db');
+const { publicDocument } = require('../utils/documentAccess');
 
 // [GET] Lấy danh sách tất cả users (Admin only)
 const getAllUsers = async (req, res) => {
@@ -51,7 +53,7 @@ const toggleUserActive = async (req, res) => {
 
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { is_active: !user.is_active },
+      data: { is_active: !user.is_active, token_version: { increment: 1 } },
       select: { id: true, name: true, email: true, is_active: true }
     });
 
@@ -75,7 +77,7 @@ const changeUserRole = async (req, res) => {
 
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { role },
+      data: { role, token_version: { increment: 1 } },
       select: { id: true, name: true, email: true, role: true }
     });
 
@@ -92,11 +94,11 @@ const getStats = async (req, res) => {
 
     const [totalUsers, totalDocs, pendingDocs, totalComments, topDocs] = await Promise.all([
       prisma.user.count(),
-      prisma.document.count({ where: { status: 'APPROVED', deleted_at: null } }),
+      prisma.document.count({ where: { status: 'APPROVED', deleted_at: null, removed_by_admin: false } }),
       prisma.document.count({ where: { status: 'PENDING', deleted_at: null } }),
       prisma.comment.count(),
       prisma.document.findMany({
-        where: { status: 'APPROVED', deleted_at: null },
+        where: { status: 'APPROVED', deleted_at: null, removed_by_admin: false },
         orderBy: { download_count: 'desc' },
         take: 5,
         select: { id: true, title: true, download_count: true, view_count: true }
@@ -167,7 +169,7 @@ const getAiModeratedDocs = async (req, res) => {
       else if (aiResult?.verdict === 'REJECT') rejectedCount++;
       else if (aiResult?.verdict === 'PENDING') pendingCount++;
 
-      return { ...doc, aiResult };
+      return { ...publicDocument(doc), aiResult };
     });
 
     const filteredDocs = filter
@@ -194,5 +196,39 @@ const getAiModeratedDocs = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, toggleUserActive, changeUserRole, getStats, getAiModeratedDocs };
+
+// Hard deletion is limited to users without documents, payments or moderation records.
+const deleteUser = async (req, res) => {
+  if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Không có quyền truy cập.' });
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: 'ID tài khoản không hợp lệ.' });
+  if (id === req.user.userId) return res.status(400).json({ message: 'Không thể xóa tài khoản của chính mình.' });
+  try {
+    const result = await serializable(async tx => {
+      const target = await tx.user.findUnique({ where: { id }, select: {
+        id: true, role: true, email: true,
+        _count: { select: { documents: true, payments: true, reports: true } },
+      } });
+      if (!target) return { status: 404, message: 'Tài khoản không còn tồn tại.' };
+      if (target.role === 'ADMIN') return { status: 403, message: 'Không được xóa tài khoản quản trị viên.' };
+      if (req.body?.confirmEmail !== target.email) return { status: 400, message: 'Email xác nhận không khớp. Hãy tải lại danh sách và thử lại.' };
+      if (target._count.documents || target._count.payments || target._count.reports) {
+        return { status: 409, message: 'Tài khoản có tài liệu, giao dịch hoặc báo cáo vi phạm. Hãy dùng chức năng khóa để giữ dữ liệu và lịch sử đối soát.' };
+      }
+      for (const model of ['comment', 'rating', 'savedDocument', 'downloadHistory', 'notification']) {
+        await tx[model].deleteMany({ where: { user_id: id } });
+      }
+      await tx.follow.deleteMany({ where: { OR: [{ follower_id: id }, { following_id: id }] } });
+      await tx.user.delete({ where: { id } });
+      return { status: 200, message: 'Đã xóa tài khoản người dùng.' };
+    });
+    return res.status(result.status).json({ message: result.message });
+  } catch (error) {
+    if (['P2003', 'P2034', 'P2025'].includes(error.code)) return res.status(409).json({ message: 'Dữ liệu tài khoản vừa thay đổi. Hãy tải lại danh sách trước khi xóa.' });
+    console.error('Delete user failed:', error.code || error.name);
+    return res.status(500).json({ message: 'Không thể xóa tài khoản. Vui lòng thử lại.' });
+  }
+};
+
+module.exports = { deleteUser, getAllUsers, toggleUserActive, changeUserRole, getStats, getAiModeratedDocs };
 

@@ -73,6 +73,7 @@ function VIPUpgrade({ onVIPActivated }) {
   const formatPrice = (amount) => amount.toLocaleString('vi-VN') + 'đ';
 
   const startPolling = (orderId) => {
+    clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
         const res = await axiosClient.get(`/payment/sepay/status/${orderId}`);
@@ -94,15 +95,9 @@ function VIPUpgrade({ onVIPActivated }) {
     }
     setLoading(true);
     try {
-      if (provider === 'SEPAY') {
-        const res = await axiosClient.post('/payment/sepay/create', { planMonths: selectedPlan });
-        setSepayOrder(res.data);
-        startPolling(res.data.orderId);
-      } else {
-        const endpoint = provider === 'MOMO' ? '/payment/momo/create' : '/payment/vnpay/create';
-        const res = await axiosClient.post(endpoint, { planMonths: selectedPlan });
-        window.location.href = res.data.payUrl;
-      }
+      const res = await axiosClient.post('/payment/sepay/create', { planMonths: selectedPlan });
+      setSepayOrder(res.data);
+      startPolling(res.data.orderId);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Lỗi tạo thanh toán');
     } finally {
@@ -176,7 +171,7 @@ function VIPUpgrade({ onVIPActivated }) {
           <div className="rounded-2xl bg-slate-50/80 border border-slate-200/80 p-4 text-left text-xs space-y-2.5">
             <div className="flex justify-between items-center text-slate-500">
               <span>Ngân hàng thụ hưởng</span>
-              <span className="font-bold text-slate-800">Sacombank</span>
+              <span className="font-bold text-slate-800">{sepayOrder.bankCode}</span>
             </div>
 
             <div className="flex justify-between items-center text-slate-500">
@@ -394,23 +389,9 @@ function VIPUpgrade({ onVIPActivated }) {
             {
               id: 'SEPAY',
               label: 'Chuyển khoản QR (SePay)',
-              desc: 'Tự động kích hoạt ngay sau 5s',
+              desc: 'Kích hoạt sau khi xác nhận giao dịch',
               icon: QrCode,
               color: 'text-indigo-600',
-            },
-            {
-              id: 'VNPAY',
-              label: 'Cổng VNPay',
-              desc: 'Thẻ ATM & Quốc tế',
-              icon: CreditCard,
-              color: 'text-blue-600',
-            },
-            {
-              id: 'MOMO',
-              label: 'Ví MoMo',
-              desc: 'Thanh toán qua ví điện tử',
-              icon: Wallet,
-              color: 'text-pink-600',
             },
           ].map((item) => {
             const Icon = item.icon;

@@ -18,16 +18,14 @@ axiosClient.interceptors.request.use(
 // Tự động logout khi token hết hạn hoặc bị khóa
 axiosClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      const msg = error.response?.data?.message || '';
-      if (msg.includes('Token') || msg.includes('token') || msg.includes('khóa')) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
-        }
-      }
+  async (error) => {
+    if (error.response?.data instanceof Blob && error.response.data.type.includes('json')) {
+      try { error.response.data = JSON.parse(await error.response.data.text()); } catch { /* Keep original error. */ }
+    }
+    if (['AUTH_REQUIRED', 'AUTH_INVALID', 'ACCOUNT_DISABLED'].includes(error.response?.data?.code)) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      if (!window.location.pathname.includes('/login')) window.location.href = '/login';
     }
     return Promise.reject(error);
   }

@@ -2,15 +2,17 @@ const express = require('express');
 const { 
   uploadDocument, getAllDocuments, getDocumentById, getMyDocuments, getUserDocuments,
   updateDocument, deleteDocument, restoreDocument, permanentDeleteDocument, getTrashDocuments,
-  incrementDownload, incrementView, getDownloadHistory, deleteDownloadHistory, clearDownloadHistory,
+  incrementView, getDownloadHistory, deleteDownloadHistory, clearDownloadHistory,
   getComments, addComment, deleteComment,
   getPendingDocuments, approveDocument, rejectDocument,
   toggleSaveDocument, getSavedDocuments, rateDocument
 } = require('../controllers/documentController');
-const { verifyToken } = require('../middleware/authMiddleware');
+const { verifyToken, optionalAuth } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 const { reportDocument } = require('../controllers/reportController');
 
+const { documentAccess } = require('../utils/documentAccess');
+const { serveDocumentFile, downloadDocumentFile } = require('../controllers/fileController');
 const router = express.Router();
 
 // --- STATIC ROUTES (phải đặt TRƯỚC dynamic /:id) ---
@@ -52,6 +54,7 @@ router.get('/suggest', async (req, res) => {
       where: {
         status: 'APPROVED',
         deleted_at: null,
+        removed_by_admin: false,
         OR: [
           { title: { contains: query, mode: 'insensitive' } },
           { description: { contains: query, mode: 'insensitive' } },
@@ -67,58 +70,25 @@ router.get('/suggest', async (req, res) => {
   }
 });
 
-// --- PROXY: stream file từ Cloudinary về frontend (tránh CORS) ---
-router.get('/proxy-file/:id', async (req, res) => {
-  try {
-    const jwt = require('jsonwebtoken');
-    const axios = require('axios');
-    const prisma = require('../db');
-
-    // Xác thực token
-    const token = req.query.token || req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ message: 'Unauthorized' });
-    try { jwt.verify(token, process.env.JWT_SECRET); } catch { return res.status(401).json({ message: 'Token không hợp lệ' }); }
-
-    const doc = await prisma.document.findUnique({ where: { id: parseInt(req.params.id) } });
-    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
-
-    const fileUrl = doc.file_url;
-
-    const response = await axios.get(fileUrl, {
-      responseType: 'stream',
-      timeout: 30000,
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-
-    const fileName = encodeURIComponent(doc.title.replace(/[\/\\:*?"<>|]/g, '_')) || 'document';
-    res.setHeader('Content-Type', doc.file_type || 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${fileName}.pdf"`);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    response.data.pipe(res);
-  } catch (err) {
-    console.error('Proxy file error:', err.response?.status, err.message);
-    res.status(500).json({ message: 'Không thể tải file' });
-  }
-});
+router.get('/proxy-file/:id', verifyToken, documentAccess(), serveDocumentFile);
 
 // --- COLLECTION ROUTE ---
 router.get('/', getAllDocuments);
 
 // --- DYNAMIC ROUTES /:id (phải đặt SAU static) ---
-router.get('/:id', getDocumentById);
-router.put('/:id', verifyToken, upload.single('file'), updateDocument);
-router.delete('/:id', verifyToken, deleteDocument);
+router.get('/:id', optionalAuth, documentAccess(), getDocumentById);
+router.put('/:id', verifyToken, documentAccess({ manage: true }), upload.single('file'), updateDocument);
+router.delete('/:id', verifyToken, documentAccess({ manage: true, includeDeleted: false }), deleteDocument);
 router.put('/:id/approve', verifyToken, approveDocument);
 router.put('/:id/reject', verifyToken, rejectDocument);
-router.put('/:id/restore', verifyToken, restoreDocument);
-router.delete('/:id/permanent', verifyToken, permanentDeleteDocument);
-router.post('/:id/save', verifyToken, toggleSaveDocument);
-router.post('/:id/download', verifyToken, incrementDownload);
-router.post('/:id/view', incrementView);
-router.get('/:id/comments', getComments);
-router.post('/:id/comments', verifyToken, addComment);
-router.post('/:id/rate', verifyToken, rateDocument);
-router.post('/:id/report', verifyToken, reportDocument);
+router.put('/:id/restore', verifyToken, documentAccess({ manage: true, includeDeleted: true }), restoreDocument);
+router.delete('/:id/permanent', verifyToken, documentAccess({ manage: true, includeDeleted: true }), permanentDeleteDocument);
+router.post('/:id/save', verifyToken, documentAccess(), toggleSaveDocument);
+router.post('/:id/download', verifyToken, documentAccess(), downloadDocumentFile);
+router.post('/:id/view', optionalAuth, documentAccess(), incrementView);
+router.get('/:id/comments', optionalAuth, documentAccess(), getComments);
+router.post('/:id/comments', verifyToken, documentAccess(), addComment);
+router.post('/:id/rate', verifyToken, documentAccess(), rateDocument);
+router.post('/:id/report', verifyToken, documentAccess(), reportDocument);
 
 module.exports = router;

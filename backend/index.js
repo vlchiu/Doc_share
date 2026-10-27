@@ -32,6 +32,7 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
+  exposedHeaders: ['X-Download-Count'],
   credentials: true
 }));
 
@@ -45,7 +46,9 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/uploads', express.static('uploads'));
+// Original uploads are served only through the authorized document endpoint.
+// Public avatars are stored separately on Cloudinary.
+app.get('/uploads/:filename', require('./controllers/avatarController').legacyAvatar);
 
 app.get('/api/test', (req, res) => {
   res.json({ message: "🚀 Backend Document Sharing Web đang chạy mượt mà!" });
@@ -60,6 +63,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/follow', followRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/chat', chatRoutes);
+
+require('./jobs/cleanupRegistrations').startRegistrationCleanup();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

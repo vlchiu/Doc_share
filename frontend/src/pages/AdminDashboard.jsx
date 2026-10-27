@@ -10,6 +10,7 @@ function AdminDashboard() {
   const [tab, setTab] = useState('pending');
   const [pendingDocs, setPendingDocs] = useState([]);
   const [users, setUsers] = useState([]);
+  const [deletingUser, setDeletingUser] = useState(null);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(1);
   const [userPagination, setUserPagination] = useState({ total: 0, totalPages: 1 });
@@ -92,20 +93,20 @@ function AdminDashboard() {
 
   const handleApprove = async (docId) => {
     try {
-      await axiosClient.put(`/documents/${docId}/approve`);
-      setPendingDocs(pendingDocs.filter(doc => doc.id !== docId));
-      setStats(s => ({ ...s, pendingDocs: s.pendingDocs - 1, totalDocs: s.totalDocs + 1 }));
+      await axiosClient.put(`/documents/${docId}/approve`, { contentVersion: pendingDocs.find(doc => doc.id === docId)?.content_version });
+      setPendingDocs(docs => docs.filter(doc => doc.id !== docId));
+      setStats(s => s ? ({ ...s, pendingDocs: Math.max(0, s.pendingDocs - 1), totalDocs: s.totalDocs + 1 }) : s);
       toast.success('Đã duyệt tài liệu!');
-    } catch { toast.error('Lỗi khi duyệt!'); }
+    } catch (error) { toast.error(error.response?.data?.message || 'Lỗi khi duyệt!'); fetchAll(); }
   };
 
   const handleReject = async (docId) => {
     const reason = prompt('Nhập lý do từ chối:');
     if (!reason?.trim()) return;
     try {
-      await axiosClient.put(`/documents/${docId}/reject`, { reason });
-      setPendingDocs(pendingDocs.filter(doc => doc.id !== docId));
-      setStats(s => ({ ...s, pendingDocs: s.pendingDocs - 1 }));
+      await axiosClient.put(`/documents/${docId}/reject`, { reason, contentVersion: pendingDocs.find(doc => doc.id === docId)?.content_version });
+      setPendingDocs(docs => docs.filter(doc => doc.id !== docId));
+      setStats(s => s ? ({ ...s, pendingDocs: Math.max(0, s.pendingDocs - 1) }) : s);
       toast.success('Đã từ chối tài liệu!');
     } catch { toast.error('Lỗi!'); }
   };
@@ -114,10 +115,28 @@ function AdminDashboard() {
     if (!window.confirm('⚠️ Xóa vĩnh viễn tài liệu này? Không thể khôi phục!')) return;
     try {
       await axiosClient.delete(`/documents/${docId}/permanent`);
-      setPendingDocs(pendingDocs.filter(doc => doc.id !== docId));
+      setPendingDocs(docs => docs.filter(doc => doc.id !== docId));
       setStats(s => s ? ({ ...s, pendingDocs: Math.max(0, s.pendingDocs - 1) }) : s);
       toast.success('Đã xóa vĩnh viễn!');
     } catch { toast.error('Lỗi khi xóa!'); }
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (deletingUser !== null) return;
+    const confirmation = window.prompt(`Xóa vĩnh viễn tài khoản ${user.name}? Bình luận, đánh giá, lượt theo dõi và dữ liệu cá nhân liên quan sẽ bị xóa. Không thể hoàn tác.\nTài khoản có tài liệu, giao dịch hoặc báo cáo vi phạm sẽ không được xóa.\nNhập chính xác email ${user.email} để xác nhận:`);
+    if (confirmation === null) return;
+    if (confirmation.trim() !== user.email) { toast.error('Email xác nhận không khớp.'); return; }
+    setDeletingUser(user.id);
+    try {
+      const res = await axiosClient.delete(`/admin/users/${user.id}`, { data: { confirmEmail: confirmation.trim() } });
+      toast.success(res.data.message);
+      const page = users.length === 1 && userPage > 1 ? userPage - 1 : userPage;
+      setUserPage(page);
+      await fetchUsers(userSearch, page);
+      await fetchAll();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xóa tài khoản.');
+    } finally { setDeletingUser(null); }
   };
 
   const handleToggleUser = async (userId) => {
@@ -295,7 +314,7 @@ function AdminDashboard() {
                       return (
                       <tr key={doc.id}>
                         <td style={{ ...tdStyle, fontWeight: 'bold' }}>
-                          <a href={`${API_URL}${doc.file_url}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{doc.title}</a>
+                          <a href={`/documents/${doc.id}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{doc.title}</a>
                         </td>
                         <td style={tdStyle}>{doc.user?.name}</td>
                         <td style={tdStyle}>{new Date(doc.created_at).toLocaleDateString('vi-VN')}</td>
@@ -391,6 +410,9 @@ function AdminDashboard() {
                             <button onClick={() => handleChangeRole(u.id, u.role)} style={{ padding: '6px 12px', background: '#f3e8ff', color: '#7c3aed', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
                               👑 Role
                             </button>
+                            {u.role !== 'ADMIN' && <button disabled={deletingUser !== null} onClick={() => handleDeleteUser(u)} style={{ padding: '6px 12px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: '6px', cursor: deletingUser !== null ? 'wait' : 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+                              {deletingUser === u.id ? 'Đang xóa…' : '🗑️ Xóa tài khoản'}
+                            </button>}
                             <button onClick={() => handleResetPassword(u.id, u.name)} style={{ padding: '6px 12px', background: '#fef3c7', color: '#d97706', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
                               🔑 Reset pass
                             </button>
@@ -492,7 +514,7 @@ function AdminDashboard() {
                     {reports.map(r => (
                       <tr key={r.id}>
                         <td style={{ ...tdStyle, fontWeight: 'bold' }}>
-                          <a href={`${API_URL}${r.document?.file_url}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{r.document?.title}</a>
+                          <a href={`/documents/${r.document?.id}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{r.document?.title}</a>
                         </td>
                         <td style={{ ...tdStyle, color: '#64748b' }}>{r.user?.name}</td>
                         <td style={{ ...tdStyle, color: '#ef4444' }}>{r.reason}</td>

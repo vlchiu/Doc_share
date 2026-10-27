@@ -54,10 +54,10 @@ function MyDocuments() {
     e.stopPropagation();
     if (!editTitle.trim()) return toast.error('Tên không được để trống!');
     try {
-      await axiosClient.put(`/documents/${docId}`, { title: editTitle.trim() });
+      const response = await axiosClient.put(`/documents/${docId}`, { title: editTitle.trim() });
       setMyDocs(
         myDocs.map((doc) =>
-          doc.id === docId ? { ...doc, title: editTitle.trim() } : doc
+          doc.id === docId ? { ...doc, ...response.data.document } : doc
         )
       );
       toast.success('Đã cập nhật tên tài liệu!');
