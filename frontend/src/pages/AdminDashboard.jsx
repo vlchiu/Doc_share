@@ -1,91 +1,158 @@
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import axiosClient from '../api/axiosClient';
-import Spinner from '../components/Spinner';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import useLatestRequest from "../hooks/useLatestRequest";
+import Modal from "../components/docshare/Modal";
+import { ErrorState } from "../components/docshare/ResourceState";
+import { useSearchParams } from "react-router-dom";
+import { Panel } from "../components/docshare/Primitives";
+import { DocumentRow } from "../components/docshare/DocumentCard";
+import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
+import axiosClient from "../api/axiosClient";
+import Spinner from "../components/Spinner";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 function AdminDashboard() {
-  const [tab, setTab] = useState('pending');
+  const startRequest = useLatestRequest();
+  const committedSearch = useRef("");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState(
+    [
+      "pending",
+      "users",
+      "categories",
+      "reports",
+      "ai",
+      "trash",
+      "top",
+    ].includes(initialTab)
+      ? initialTab
+      : "pending",
+  );
   const [pendingDocs, setPendingDocs] = useState([]);
   const [users, setUsers] = useState([]);
   const [deletingUser, setDeletingUser] = useState(null);
-  const [userSearch, setUserSearch] = useState('');
+  const [userSearch, setUserSearch] = useState("");
   const [userPage, setUserPage] = useState(1);
-  const [userPagination, setUserPagination] = useState({ total: 0, totalPages: 1 });
+  const [userPagination, setUserPagination] = useState({
+    total: 0,
+    totalPages: 1,
+  });
   const [stats, setStats] = useState(null);
   const [categories, setCategories] = useState([]);
   const [reports, setReports] = useState([]);
   const [trashDocs, setTrashDocs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatDesc, setNewCatDesc] = useState('');
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatDesc, setNewCatDesc] = useState("");
   const [editingCat, setEditingCat] = useState(null);
   const [resolvingReport, setResolvingReport] = useState(null); // { id, docTitle }
-  const [resolveAction, setResolveAction] = useState('WARN');
-  const [resolveNote, setResolveNote] = useState('');
+  const [resolveAction, setResolveAction] = useState("WARN");
+  const [resolveNote, setResolveNote] = useState("");
   const [aiModerated, setAiModerated] = useState([]);
   const [aiSummary, setAiSummary] = useState(null);
-  const [aiFilter, setAiFilter] = useState('');
+  const [aiFilter, setAiFilter] = useState("");
   const [aiPage, setAiPage] = useState(1);
   const [aiPagination, setAiPagination] = useState({ total: 0, totalPages: 1 });
   const [aiLoading, setAiLoading] = useState(false);
 
-  useEffect(() => { fetchAll(); fetchUsers('', 1); }, []);
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
-  const fetchAiModerated = async (verdict = '', page = 1) => {
-    setAiLoading(true);
-    try {
-      const params = new URLSearchParams({ page, limit: 20, ...(verdict && { verdict }) });
-      const res = await axiosClient.get(`/admin/ai-moderated?${params}`);
-      setAiModerated(res.data.docs || []);
-      setAiSummary(res.data.summary || null);
-      setAiPagination(res.data.pagination || { total: 0, totalPages: 1 });
-    } catch { toast.error('Lỗi tải dữ liệu AI kiểm duyệt!'); }
-    finally { setAiLoading(false); }
-  };
+  const fetchAiModerated = useCallback(
+    async (verdict = "", page = 1) => {
+      const signal = startRequest("ai");
+      setAiLoading(true);
+      try {
+        const params = new URLSearchParams({
+          page,
+          limit: 20,
+          ...(verdict && { verdict }),
+        });
+        const res = await axiosClient.get(`/admin/ai-moderated?${params}`, {
+          signal,
+        });
+        if (signal.aborted) return;
+        setAiModerated(res.data.docs || []);
+        setAiSummary(res.data.summary || null);
+        setAiPagination(res.data.pagination || { total: 0, totalPages: 1 });
+      } catch {
+        if (!signal.aborted) toast.error("Lỗi tải dữ liệu AI kiểm duyệt!");
+      } finally {
+        if (!signal.aborted) setAiLoading(false);
+      }
+    },
+    [startRequest],
+  );
 
   useEffect(() => {
-    if (tab === 'ai') fetchAiModerated(aiFilter, aiPage);
-  }, [tab, aiFilter, aiPage]);
+    if (tab === "ai") fetchAiModerated(aiFilter, aiPage);
+  }, [tab, aiFilter, aiPage, fetchAiModerated]);
 
-  const fetchUsers = async (search = '', page = 1) => {
-    try {
-      const params = new URLSearchParams({ page, limit: 20, ...(search && { search }) });
-      const res = await axiosClient.get(`/admin/users?${params}`);
-      setUsers(res.data.users || []);
-      setUserPagination(res.data.pagination);
-    } catch { toast.error('Lỗi tải danh sách user!'); }
-  };
+  const fetchUsers = useCallback(
+    async (search = "", page = 1) => {
+      committedSearch.current = search;
+      const signal = startRequest("users");
+      try {
+        const params = new URLSearchParams({
+          page,
+          limit: 20,
+          ...(search && { search }),
+        });
+        const res = await axiosClient.get(`/admin/users?${params}`, { signal });
+        if (signal.aborted) return;
+        setUsers(res.data.users || []);
+        setUserPagination(res.data.pagination);
+      } catch {
+        if (!signal.aborted) toast.error("Lỗi tải danh sách user!");
+      }
+    },
+    [startRequest],
+  );
 
   useEffect(() => {
-    if (tab === 'users') fetchUsers(userSearch, userPage);
-  }, [tab, userPage]); // userSearch không trigger tự động — phải bấm nút Tìm
+    if (tab === "users") fetchUsers(committedSearch.current, userPage);
+  }, [tab, userPage, fetchUsers]); // userSearch không trigger tự động — phải bấm nút Tìm
 
+  const [loadError, setLoadError] = useState(null);
   const fetchAll = async () => {
+    setLoadError(null);
     setLoading(true);
     try {
-      const [pendingRes, statsRes, catsRes, reportsRes, trashRes] = await Promise.allSettled([
-        axiosClient.get('/documents/pending'),
-        axiosClient.get('/admin/stats'),
-        axiosClient.get('/categories'),
-        axiosClient.get('/admin/reports'),
-        axiosClient.get('/documents/trash'),
-      ]);
+      const [pendingRes, statsRes, catsRes, reportsRes, trashRes] =
+        await Promise.allSettled([
+          axiosClient.get("/documents/pending"),
+          axiosClient.get("/admin/stats"),
+          axiosClient.get("/categories"),
+          axiosClient.get("/admin/reports"),
+          axiosClient.get("/documents/trash"),
+        ]);
 
-      if (pendingRes.status === 'fulfilled') setPendingDocs(pendingRes.value.data);
-      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
-      if (catsRes.status === 'fulfilled') setCategories(catsRes.value.data);
-      if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.data);
-      if (trashRes.status === 'fulfilled') setTrashDocs(trashRes.value.data);
+      if (pendingRes.status === "fulfilled")
+        setPendingDocs(pendingRes.value.data);
+      if (statsRes.status === "fulfilled") setStats(statsRes.value.data);
+      if (catsRes.status === "fulfilled") setCategories(catsRes.value.data);
+      if (reportsRes.status === "fulfilled") setReports(reportsRes.value.data);
+      if (trashRes.status === "fulfilled") setTrashDocs(trashRes.value.data);
 
-      [pendingRes, statsRes, catsRes, reportsRes, trashRes].forEach((r, i) => {
-        if (r.status === 'rejected') console.error(`fetchAll[${i}] failed:`, r.reason?.response?.data || r.reason?.message);
-      });
-    } catch (error) {
-      console.error("fetchAll error:", error);
-      toast.error('Lỗi tải dữ liệu quản trị!');
+      const failed = [pendingRes, statsRes, catsRes, reportsRes, trashRes].find(
+        (r) => r.status === "rejected",
+      );
+      if (failed)
+        setLoadError({ status: failed.reason?.response?.status || 0 });
+    } catch {
+      setLoadError({ status: 0 });
     } finally {
       setLoading(false);
     }
@@ -93,327 +160,870 @@ function AdminDashboard() {
 
   const handleApprove = async (docId) => {
     try {
-      await axiosClient.put(`/documents/${docId}/approve`, { contentVersion: pendingDocs.find(doc => doc.id === docId)?.content_version });
-      setPendingDocs(docs => docs.filter(doc => doc.id !== docId));
-      setStats(s => s ? ({ ...s, pendingDocs: Math.max(0, s.pendingDocs - 1), totalDocs: s.totalDocs + 1 }) : s);
-      toast.success('Đã duyệt tài liệu!');
-    } catch (error) { toast.error(error.response?.data?.message || 'Lỗi khi duyệt!'); fetchAll(); }
+      await axiosClient.put(`/documents/${docId}/approve`, {
+        contentVersion: pendingDocs.find((doc) => doc.id === docId)
+          ?.content_version,
+      });
+      setPendingDocs((docs) => docs.filter((doc) => doc.id !== docId));
+      setStats((s) =>
+        s
+          ? {
+              ...s,
+              pendingDocs: Math.max(0, s.pendingDocs - 1),
+              totalDocs: s.totalDocs + 1,
+            }
+          : s,
+      );
+      toast.success("Đã duyệt tài liệu!");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Lỗi khi duyệt!");
+      fetchAll();
+    }
   };
 
   const handleReject = async (docId) => {
-    const reason = prompt('Nhập lý do từ chối:');
+    const reason = prompt("Nhập lý do từ chối:");
     if (!reason?.trim()) return;
     try {
-      await axiosClient.put(`/documents/${docId}/reject`, { reason, contentVersion: pendingDocs.find(doc => doc.id === docId)?.content_version });
-      setPendingDocs(docs => docs.filter(doc => doc.id !== docId));
-      setStats(s => s ? ({ ...s, pendingDocs: Math.max(0, s.pendingDocs - 1) }) : s);
-      toast.success('Đã từ chối tài liệu!');
-    } catch { toast.error('Lỗi!'); }
+      await axiosClient.put(`/documents/${docId}/reject`, {
+        reason,
+        contentVersion: pendingDocs.find((doc) => doc.id === docId)
+          ?.content_version,
+      });
+      setPendingDocs((docs) => docs.filter((doc) => doc.id !== docId));
+      setStats((s) =>
+        s ? { ...s, pendingDocs: Math.max(0, s.pendingDocs - 1) } : s,
+      );
+      toast.success("Đã từ chối tài liệu!");
+    } catch {
+      toast.error("Lỗi!");
+    }
   };
 
   const handleDeleteDoc = async (docId) => {
-    if (!window.confirm('⚠️ Xóa vĩnh viễn tài liệu này? Không thể khôi phục!')) return;
+    if (!window.confirm("⚠️ Xóa vĩnh viễn tài liệu này? Không thể khôi phục!"))
+      return;
     try {
       await axiosClient.delete(`/documents/${docId}/permanent`);
-      setPendingDocs(docs => docs.filter(doc => doc.id !== docId));
-      setStats(s => s ? ({ ...s, pendingDocs: Math.max(0, s.pendingDocs - 1) }) : s);
-      toast.success('Đã xóa vĩnh viễn!');
-    } catch { toast.error('Lỗi khi xóa!'); }
+      setPendingDocs((docs) => docs.filter((doc) => doc.id !== docId));
+      setStats((s) =>
+        s ? { ...s, pendingDocs: Math.max(0, s.pendingDocs - 1) } : s,
+      );
+      toast.success("Đã xóa vĩnh viễn!");
+    } catch {
+      toast.error("Lỗi khi xóa!");
+    }
   };
 
   const handleDeleteUser = async (user) => {
     if (deletingUser !== null) return;
-    const confirmation = window.prompt(`Xóa vĩnh viễn tài khoản ${user.name}? Bình luận, đánh giá, lượt theo dõi và dữ liệu cá nhân liên quan sẽ bị xóa. Không thể hoàn tác.\nTài khoản có tài liệu, giao dịch hoặc báo cáo vi phạm sẽ không được xóa.\nNhập chính xác email ${user.email} để xác nhận:`);
+    const confirmation = window.prompt(
+      `Xóa vĩnh viễn tài khoản ${user.name}? Bình luận, đánh giá, lượt theo dõi và dữ liệu cá nhân liên quan sẽ bị xóa. Không thể hoàn tác.\nTài khoản có tài liệu, giao dịch hoặc báo cáo vi phạm sẽ không được xóa.\nNhập chính xác email ${user.email} để xác nhận:`,
+    );
     if (confirmation === null) return;
-    if (confirmation.trim() !== user.email) { toast.error('Email xác nhận không khớp.'); return; }
+    if (confirmation.trim() !== user.email) {
+      toast.error("Email xác nhận không khớp.");
+      return;
+    }
     setDeletingUser(user.id);
     try {
-      const res = await axiosClient.delete(`/admin/users/${user.id}`, { data: { confirmEmail: confirmation.trim() } });
+      const res = await axiosClient.delete(`/admin/users/${user.id}`, {
+        data: { confirmEmail: confirmation.trim() },
+      });
       toast.success(res.data.message);
       const page = users.length === 1 && userPage > 1 ? userPage - 1 : userPage;
       setUserPage(page);
       await fetchUsers(userSearch, page);
       await fetchAll();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể xóa tài khoản.');
-    } finally { setDeletingUser(null); }
+      toast.error(error.response?.data?.message || "Không thể xóa tài khoản.");
+    } finally {
+      setDeletingUser(null);
+    }
   };
 
   const handleToggleUser = async (userId) => {
     try {
       const res = await axiosClient.put(`/admin/users/${userId}/toggle-active`);
-      setUsers(users.map(u => u.id === userId ? { ...u, is_active: res.data.user.is_active } : u));
-      toast.success(res.data.user.is_active ? 'Đã mở khóa tài khoản!' : 'Đã khóa tài khoản!');
-    } catch { toast.error('Lỗi!'); }
+      setUsers(
+        users.map((u) =>
+          u.id === userId ? { ...u, is_active: res.data.user.is_active } : u,
+        ),
+      );
+      toast.success(
+        res.data.user.is_active
+          ? "Đã mở khóa tài khoản!"
+          : "Đã khóa tài khoản!",
+      );
+    } catch {
+      toast.error("Lỗi!");
+    }
   };
 
   const handleChangeRole = async (userId, currentRole) => {
-    const newRole = currentRole === 'ADMIN' ? 'USER' : 'ADMIN';
+    const newRole = currentRole === "ADMIN" ? "USER" : "ADMIN";
     if (!window.confirm(`Đổi role thành ${newRole}?`)) return;
     try {
-      const res = await axiosClient.put(`/admin/users/${userId}/role`, { role: newRole });
-      setUsers(users.map(u => u.id === userId ? { ...u, role: res.data.user.role } : u));
+      const res = await axiosClient.put(`/admin/users/${userId}/role`, {
+        role: newRole,
+      });
+      setUsers(
+        users.map((u) =>
+          u.id === userId ? { ...u, role: res.data.user.role } : u,
+        ),
+      );
       toast.success(`Đã đổi role thành ${newRole}!`);
-    } catch { toast.error('Lỗi!'); }
+    } catch {
+      toast.error("Lỗi!");
+    }
   };
 
   const handleResetPassword = async (userId, userName) => {
-    const newPassword = prompt(`Nhập mật khẩu mới cho "${userName}" (tối thiểu 6 ký tự):`);
+    const newPassword = prompt(
+      `Nhập mật khẩu mới cho "${userName}" (tối thiểu 6 ký tự):`,
+    );
     if (!newPassword?.trim()) return;
-    if (newPassword.length < 6) { toast.error('Mật khẩu phải có ít nhất 6 ký tự!'); return; }
+    if (newPassword.length < 6) {
+      toast.error("Mật khẩu phải có ít nhất 6 ký tự!");
+      return;
+    }
     try {
-      await axiosClient.put(`/auth/admin/reset-password/${userId}`, { newPassword });
+      await axiosClient.put(`/auth/admin/reset-password/${userId}`, {
+        newPassword,
+      });
       toast.success(`Đã reset mật khẩu cho ${userName}!`);
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi!");
+    }
   };
 
   const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
     try {
-      const res = await axiosClient.post('/categories', { name: newCatName, description: newCatDesc });
+      const res = await axiosClient.post("/categories", {
+        name: newCatName,
+        description: newCatDesc,
+      });
       setCategories([...categories, res.data]);
-      setNewCatName(''); setNewCatDesc('');
-      toast.success('Đã thêm danh mục!');
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+      setNewCatName("");
+      setNewCatDesc("");
+      toast.success("Đã thêm danh mục!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi!");
+    }
   };
 
   const handleUpdateCategory = async (id) => {
     if (!editingCat?.name?.trim()) return;
     try {
-      const res = await axiosClient.put(`/categories/${id}`, { name: editingCat.name, description: editingCat.description });
-      setCategories(categories.map(c => c.id === id ? res.data : c));
+      const res = await axiosClient.put(`/categories/${id}`, {
+        name: editingCat.name,
+        description: editingCat.description,
+      });
+      setCategories(categories.map((c) => (c.id === id ? res.data : c)));
       setEditingCat(null);
-      toast.success('Đã cập nhật!');
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+      toast.success("Đã cập nhật!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi!");
+    }
   };
 
   const handleDeleteCategory = async (id) => {
-    if (!window.confirm('Xóa danh mục này?')) return;
+    if (!window.confirm("Xóa danh mục này?")) return;
     try {
       await axiosClient.delete(`/categories/${id}`);
-      setCategories(categories.filter(c => c.id !== id));
-      toast.success('Đã xóa danh mục!');
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+      setCategories(categories.filter((c) => c.id !== id));
+      toast.success("Đã xóa danh mục!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi!");
+    }
   };
 
   const handleResolveReport = async (reportId) => {
     if (!resolveAction) return;
     try {
-      await axiosClient.put(`/admin/reports/${reportId}/resolve`, { action: resolveAction, admin_note: resolveNote });
-      setReports(reports.filter(r => r.id !== reportId));
-      setResolvingReport(null); setResolveNote(''); setResolveAction('WARN');
-      toast.success('Đã xử lý báo cáo!');
-    } catch { toast.error('Lỗi!'); }
+      await axiosClient.put(`/admin/reports/${reportId}/resolve`, {
+        action: resolveAction,
+        admin_note: resolveNote,
+      });
+      setReports(reports.filter((r) => r.id !== reportId));
+      setResolvingReport(null);
+      setResolveNote("");
+      setResolveAction("WARN");
+      toast.success("Đã xử lý báo cáo!");
+    } catch {
+      toast.error("Lỗi!");
+    }
   };
 
   const handleRestoreTrash = async (docId) => {
     try {
       await axiosClient.put(`/documents/${docId}/restore`);
-      setTrashDocs(trashDocs.filter(d => d.id !== docId));
-      toast.success('Đã khôi phục tài liệu!');
-    } catch (err) { toast.error(err.response?.data?.message || 'Lỗi!'); }
+      setTrashDocs(trashDocs.filter((d) => d.id !== docId));
+      toast.success("Đã khôi phục tài liệu!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi!");
+    }
   };
 
   const handlePermanentDeleteTrash = async (docId) => {
-    if (!window.confirm('⚠️ Xóa vĩnh viễn? Không thể khôi phục!')) return;
+    if (!window.confirm("⚠️ Xóa vĩnh viễn? Không thể khôi phục!")) return;
     try {
       await axiosClient.delete(`/documents/${docId}/permanent`);
-      setTrashDocs(trashDocs.filter(d => d.id !== docId));
-      toast.success('Đã xóa vĩnh viễn!');
-    } catch { toast.error('Lỗi!'); }
+      setTrashDocs(trashDocs.filter((d) => d.id !== docId));
+      toast.success("Đã xóa vĩnh viễn!");
+    } catch {
+      toast.error("Lỗi!");
+    }
   };
 
-  const thStyle = { padding: '12px 15px', textAlign: 'left', fontWeight: 'bold', color: '#64748b', fontSize: '12px', textTransform: 'uppercase' };
-  const tdStyle = { padding: '12px 15px', borderBottom: '1px solid #f1f5f9', fontSize: '14px' };
-  const tabStyle = (active) => ({ padding: '10px 20px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', background: active ? '#3b82f6' : '#e2e8f0', color: active ? '#fff' : '#555' });
+  const thStyle = {
+    padding: "12px 15px",
+    textAlign: "left",
+    fontWeight: "bold",
+    color: "#64748b",
+    fontSize: "12px",
+    textTransform: "uppercase",
+  };
+  const tdStyle = {
+    padding: "12px 15px",
+    borderBottom: "1px solid #f1f5f9",
+    fontSize: "14px",
+  };
+  const tabStyle = (active) => ({
+    padding: "10px 20px",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "bold",
+    fontSize: "14px",
+    background: active ? "#3b82f6" : "#e2e8f0",
+    color: active ? "#fff" : "#555",
+  });
+
+  if (loadError)
+    return (
+      <ErrorState
+        error={loadError}
+        onRetry={fetchAll}
+        title="Chưa tải đủ dữ liệu quản trị"
+      />
+    );
 
   return (
-    <div style={{ padding: '20px 0', color: '#1a1a1a' }}>
-      <h2 style={{ textAlign: 'center', color: '#b91c1c', fontSize: '26px', marginBottom: '24px' }}>🛡️ Khu vực Quản trị</h2>
+    <div className="ds-admin">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">
+            Tổng quan quản trị DocShare
+          </h1>
+          <p className="mt-2 text-sm text-[#7181a8]">
+            Theo dõi hoạt động và quản lý cộng đồng của bạn.
+          </p>
+        </div>
+        <span className="rounded-xl border border-blue-100 px-4 py-3 text-xs">
+          {new Date().toLocaleDateString("vi-VN")}
+        </span>
+      </div>
 
       {/* THỐNG KÊ */}
       {stats && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <div
+            className="ds-admin-stats"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+              gap: "16px",
+              marginBottom: "24px",
+            }}
+          >
             {[
-              { label: 'Tổng người dùng', value: stats.totalUsers, icon: '👥', color: '#dbeafe' },
-              { label: 'Tài liệu đã duyệt', value: stats.totalDocs, icon: '📄', color: '#dcfce7' },
-              { label: 'Chờ duyệt', value: stats.pendingDocs, icon: '⏳', color: '#fef9c3' },
-              { label: 'Bình luận', value: stats.totalComments, icon: '💬', color: '#f3e8ff' },
-            ].map(s => (
-              <div key={s.label} style={{ background: s.color, padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: '28px' }}>{s.icon}</div>
-                <div style={{ fontSize: '26px', fontWeight: 'bold', color: '#1a1a1a' }}>{s.value}</div>
-                <div style={{ fontSize: '13px', color: '#555', marginTop: '4px' }}>{s.label}</div>
+              {
+                label: "Tổng người dùng",
+                value: stats.totalUsers,
+                icon: "👥",
+                color: "#dbeafe",
+              },
+              {
+                label: "Tài liệu đã duyệt",
+                value: stats.totalDocs,
+                icon: "📄",
+                color: "#dcfce7",
+              },
+              {
+                label: "Chờ duyệt",
+                value: stats.pendingDocs,
+                icon: "⏳",
+                color: "#fef9c3",
+              },
+              {
+                label: "Bình luận",
+                value: stats.totalComments,
+                icon: "💬",
+                color: "#f3e8ff",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  background: s.color,
+                  padding: "20px",
+                  borderRadius: "12px",
+                  textAlign: "center",
+                }}
+              >
+                <div style={{ fontSize: "28px" }}>{s.icon}</div>
+                <div
+                  style={{
+                    fontSize: "26px",
+                    fontWeight: "bold",
+                    color: "#1a1a1a",
+                  }}
+                >
+                  {s.value}
+                </div>
+                <div
+                  style={{ fontSize: "13px", color: "#555", marginTop: "4px" }}
+                >
+                  {s.label}
+                </div>
               </div>
             ))}
           </div>
 
           {/* BIỂU ĐỒ 7 NGÀY */}
           {stats.chartData && (
-            <div style={{ background: '#fff', borderRadius: '14px', padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', marginBottom: '30px' }}>
-              <h3 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 'bold', color: '#334155' }}>📊 Hoạt động 7 ngày gần nhất</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={stats.chartData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
-                  <Legend wrapperStyle={{ fontSize: '13px' }} />
-                  <Bar dataKey="uploads" name="Tải lên" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="downloads" name="Tải xuống" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] mb-6">
+              <Panel title="Thống kê hoạt động tài liệu">
+                <p className="mb-4 text-xs text-[#7181a8]">
+                  Hoạt động 7 ngày gần nhất
+                </p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart
+                    data={stats.chartData}
+                    margin={{ top: 0, right: 10, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12, fill: "#94a3b8" }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: "#94a3b8" }}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        fontSize: "13px",
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "13px" }} />
+                    <Area
+                      type="monotone"
+                      dataKey="uploads"
+                      name="Tải lên"
+                      stroke="#1761ff"
+                      fill="#1761ff"
+                      fillOpacity={0.12}
+                      strokeWidth={2}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="downloads"
+                      name="Tải xuống"
+                      stroke="#80bdff"
+                      fill="#80bdff"
+                      fillOpacity={0.12}
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Panel>
+              <Panel title="Tài liệu chờ duyệt">
+                {pendingDocs.slice(0, 4).map((doc) => (
+                  <DocumentRow key={doc.id} doc={doc} />
+                ))}
+                {!pendingDocs.length && (
+                  <p className="text-sm text-[#7181a8]">
+                    Không có tài liệu đang chờ duyệt.
+                  </p>
+                )}
+                <button
+                  onClick={() => setTab("pending")}
+                  className="mt-3 text-xs text-blue-600"
+                >
+                  Xem danh sách chờ duyệt →
+                </button>
+              </Panel>
             </div>
           )}
         </>
       )}
 
       {/* TABS */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <button style={tabStyle(tab === 'pending')} onClick={() => setTab('pending')}>⏳ Chờ duyệt ({pendingDocs.length})</button>
-        <button style={tabStyle(tab === 'users')} onClick={() => setTab('users')}>👥 Quản lý User {stats?.totalUsers ? `(${stats.totalUsers})` : ''}</button>
-        <button style={tabStyle(tab === 'categories')} onClick={() => setTab('categories')}>📁 Danh mục ({categories.length})</button>
-        <button style={tabStyle(tab === 'reports')} onClick={() => setTab('reports')}>🚨 Báo cáo {reports.length > 0 && `(${reports.length})`}</button>
-        <button style={tabStyle(tab === 'ai')} onClick={() => setTab('ai')}>🤖 AI Kiểm duyệt</button>
-        <button style={tabStyle(tab === 'trash')} onClick={() => setTab('trash')}>🗑️ Thùng rác {trashDocs.length > 0 && `(${trashDocs.length})`}</button>
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          style={tabStyle(tab === "pending")}
+          onClick={() => setTab("pending")}
+        >
+          ⏳ Chờ duyệt ({pendingDocs.length})
+        </button>
+        <button
+          style={tabStyle(tab === "users")}
+          onClick={() => setTab("users")}
+        >
+          👥 Quản lý User {stats?.totalUsers ? `(${stats.totalUsers})` : ""}
+        </button>
+        <button
+          style={tabStyle(tab === "categories")}
+          onClick={() => setTab("categories")}
+        >
+          📁 Danh mục ({categories.length})
+        </button>
+        <button
+          style={tabStyle(tab === "reports")}
+          onClick={() => setTab("reports")}
+        >
+          🚨 Báo cáo {reports.length > 0 && `(${reports.length})`}
+        </button>
+        <button style={tabStyle(tab === "ai")} onClick={() => setTab("ai")}>
+          🤖 AI Kiểm duyệt
+        </button>
+        <button
+          style={tabStyle(tab === "trash")}
+          onClick={() => setTab("trash")}
+        >
+          🗑️ Thùng rác {trashDocs.length > 0 && `(${trashDocs.length})`}
+        </button>
         {stats?.topDocs?.length > 0 && (
-          <button style={tabStyle(tab === 'top')} onClick={() => setTab('top')}>🏆 Top tài liệu</button>
+          <button style={tabStyle(tab === "top")} onClick={() => setTab("top")}>
+            🏆 Top tài liệu
+          </button>
         )}
       </div>
 
-      <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-        {loading ? <Spinner /> : (
+      <div
+        className="ds-admin-table"
+        style={{
+          background: "#fff",
+          padding: "16px",
+          borderRadius: "12px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+        }}
+      >
+        {loading ? (
+          <Spinner />
+        ) : (
           <>
             {/* TAB: CHỜ DUYỆT */}
-            {tab === 'pending' && (
-              pendingDocs.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#10b981', fontWeight: 'bold', padding: '30px 0' }}>🎉 Không có tài liệu nào đang chờ duyệt!</p>
+            {tab === "pending" &&
+              (pendingDocs.length === 0 ? (
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "#10b981",
+                    fontWeight: "bold",
+                    padding: "30px 0",
+                  }}
+                >
+                  🎉 Không có tài liệu nào đang chờ duyệt!
+                </p>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
+                    <tr style={{ background: "#f8fafc" }}>
                       <th style={thStyle}>Tên tài liệu</th>
                       <th style={thStyle}>Người đăng</th>
                       <th style={thStyle}>Ngày tải lên</th>
                       <th style={thStyle}>🤖 AI Kiểm duyệt</th>
-                      <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>
+                        Hành động
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingDocs.map(doc => {
+                    {pendingDocs.map((doc) => {
                       // Parse AI moderation result
                       let aiResult = null;
-                      try { if (doc.ai_moderation_result) aiResult = JSON.parse(doc.ai_moderation_result); } catch {}
+                      try {
+                        if (doc.ai_moderation_result)
+                          aiResult = JSON.parse(doc.ai_moderation_result);
+                      } catch {
+                        /* Older records may not contain valid moderation JSON. */
+                      }
 
-                      const aiColor = aiResult?.verdict === 'APPROVE' ? '#16a34a' : aiResult?.verdict === 'REJECT' ? '#b91c1c' : '#d97706';
-                      const aiBg = aiResult?.verdict === 'APPROVE' ? '#dcfce7' : aiResult?.verdict === 'REJECT' ? '#fee2e2' : '#fef9c3';
-                      const aiIcon = aiResult?.verdict === 'APPROVE' ? '🤖✅' : aiResult?.verdict === 'REJECT' ? '🤖❌' : '🤖⏳';
+                      const aiColor =
+                        aiResult?.verdict === "APPROVE"
+                          ? "#16a34a"
+                          : aiResult?.verdict === "REJECT"
+                            ? "#b91c1c"
+                            : "#d97706";
+                      const aiBg =
+                        aiResult?.verdict === "APPROVE"
+                          ? "#dcfce7"
+                          : aiResult?.verdict === "REJECT"
+                            ? "#fee2e2"
+                            : "#fef9c3";
+                      const aiIcon =
+                        aiResult?.verdict === "APPROVE"
+                          ? "🤖✅"
+                          : aiResult?.verdict === "REJECT"
+                            ? "🤖❌"
+                            : "🤖⏳";
 
                       return (
-                      <tr key={doc.id}>
-                        <td style={{ ...tdStyle, fontWeight: 'bold' }}>
-                          <a href={`/documents/${doc.id}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{doc.title}</a>
-                        </td>
-                        <td style={tdStyle}>{doc.user?.name}</td>
-                        <td style={tdStyle}>{new Date(doc.created_at).toLocaleDateString('vi-VN')}</td>
-                        {/* AI MODERATION RESULT */}
-                        <td style={{ ...tdStyle, maxWidth: '180px' }}>
-                          {aiResult ? (
-                            <div>
-                              <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: aiBg, color: aiColor }}>
-                                {aiIcon} {aiResult.verdict}
+                        <tr key={doc.id}>
+                          <td style={{ ...tdStyle, fontWeight: "bold" }}>
+                            <a
+                              href={`/documents/${doc.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                textDecoration: "none",
+                                color: "#3b82f6",
+                              }}
+                            >
+                              {doc.title}
+                            </a>
+                          </td>
+                          <td style={tdStyle}>{doc.user?.name}</td>
+                          <td style={tdStyle}>
+                            {new Date(doc.created_at).toLocaleDateString(
+                              "vi-VN",
+                            )}
+                          </td>
+                          {/* AI MODERATION RESULT */}
+                          <td style={{ ...tdStyle, maxWidth: "180px" }}>
+                            {aiResult ? (
+                              <div>
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    padding: "3px 8px",
+                                    borderRadius: "6px",
+                                    fontSize: "11px",
+                                    fontWeight: "bold",
+                                    background: aiBg,
+                                    color: aiColor,
+                                  }}
+                                >
+                                  {aiIcon} {aiResult.verdict}
+                                </span>
+                                {aiResult.reason && (
+                                  <p
+                                    style={{
+                                      margin: "4px 0 0",
+                                      fontSize: "11px",
+                                      color: "#64748b",
+                                      lineHeight: 1.4,
+                                    }}
+                                  >
+                                    {aiResult.reason}
+                                  </p>
+                                )}
+                                {aiResult.confidence && (
+                                  <p
+                                    style={{
+                                      margin: "2px 0 0",
+                                      fontSize: "10px",
+                                      color: "#94a3b8",
+                                    }}
+                                  >
+                                    Độ tin cậy:{" "}
+                                    {Math.round(aiResult.confidence * 100)}%
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span
+                                style={{ fontSize: "11px", color: "#94a3b8" }}
+                              >
+                                ⏳ Đang phân tích...
                               </span>
-                              {aiResult.reason && (
-                                <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>{aiResult.reason}</p>
-                              )}
-                              {aiResult.confidence && (
-                                <p style={{ margin: '2px 0 0', fontSize: '10px', color: '#94a3b8' }}>Độ tin cậy: {Math.round(aiResult.confidence * 100)}%</p>
-                              )}
+                            )}
+                          </td>
+                          <td style={{ ...tdStyle, textAlign: "center" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "8px",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <button
+                                onClick={() => handleApprove(doc.id)}
+                                style={{
+                                  padding: "7px 14px",
+                                  background: "#dcfce7",
+                                  color: "#16a34a",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  cursor: "pointer",
+                                  fontWeight: "bold",
+                                  fontSize: "12px",
+                                }}
+                              >
+                                ✅ Duyệt
+                              </button>
+                              <button
+                                onClick={() => handleReject(doc.id)}
+                                style={{
+                                  padding: "7px 14px",
+                                  background: "#fef9c3",
+                                  color: "#a16207",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  cursor: "pointer",
+                                  fontWeight: "bold",
+                                  fontSize: "12px",
+                                }}
+                              >
+                                ❌ Từ chối
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDoc(doc.id)}
+                                style={{
+                                  padding: "7px 14px",
+                                  background: "#fee2e2",
+                                  color: "#b91c1c",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  cursor: "pointer",
+                                  fontWeight: "bold",
+                                  fontSize: "12px",
+                                }}
+                              >
+                                🗑️ Xóa
+                              </button>
                             </div>
-                          ) : (
-                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>⏳ Đang phân tích...</span>
-                          )}
-                        </td>
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                            <button onClick={() => handleApprove(doc.id)} style={{ padding: '7px 14px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✅ Duyệt</button>
-                            <button onClick={() => handleReject(doc.id)} style={{ padding: '7px 14px', background: '#fef9c3', color: '#a16207', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>❌ Từ chối</button>
-                            <button onClick={() => handleDeleteDoc(doc.id)} style={{ padding: '7px 14px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🗑️ Xóa</button>
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>
                 </table>
-              )
-            )}
+              ))}
 
             {/* TAB: QUẢN LÝ USER */}
-            {tab === 'users' && (
+            {tab === "users" && (
               <>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center' }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    marginBottom: "16px",
+                    alignItems: "center",
+                  }}
+                >
                   <input
-                    type="text" placeholder="🔍 Tìm theo tên hoặc email..."
+                    type="text"
+                    placeholder="🔍 Tìm theo tên hoặc email..."
                     value={userSearch}
-                    onChange={e => setUserSearch(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { setUserPage(1); fetchUsers(userSearch, 1); } }}
-                    style={{ width: '100%', maxWidth: '320px', padding: '9px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setUserPage(1);
+                        fetchUsers(userSearch, 1);
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      maxWidth: "320px",
+                      padding: "9px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      outline: "none",
+                      fontSize: "14px",
+                    }}
                   />
-                  <button onClick={() => { setUserPage(1); fetchUsers(userSearch, 1); }}
-                    style={{ padding: '9px 18px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>
+                  <button
+                    onClick={() => {
+                      setUserPage(1);
+                      fetchUsers(userSearch, 1);
+                    }}
+                    style={{
+                      padding: "9px 18px",
+                      background: "#3b82f6",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "13px",
+                    }}
+                  >
                     Tìm
                   </button>
                   {userSearch && (
-                    <button onClick={() => { setUserSearch(''); setUserPage(1); fetchUsers('', 1); }}
-                      style={{ padding: '9px 14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>
+                    <button
+                      onClick={() => {
+                        setUserSearch("");
+                        setUserPage(1);
+                        fetchUsers("", 1);
+                      }}
+                      style={{
+                        padding: "9px 14px",
+                        background: "#f1f5f9",
+                        color: "#64748b",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                        fontSize: "13px",
+                      }}
+                    >
                       ✕
                     </button>
                   )}
-                  <span style={{ fontSize: '13px', color: '#94a3b8', marginLeft: 'auto' }}>{userPagination.total} người dùng</span>
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      color: "#94a3b8",
+                      marginLeft: "auto",
+                    }}
+                  >
+                    {userPagination.total} người dùng
+                  </span>
                 </div>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
+                    <tr style={{ background: "#f8fafc" }}>
                       <th style={thStyle}>Tên</th>
                       <th style={thStyle}>Email</th>
                       <th style={thStyle}>Role</th>
                       <th style={thStyle}>Tài liệu</th>
                       <th style={thStyle}>Trạng thái</th>
-                      <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>
+                        Hành động
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map(u => (
+                    {users.map((u) => (
                       <tr key={u.id}>
-                        <td style={{ ...tdStyle, fontWeight: 'bold' }}>{u.name}</td>
-                        <td style={{ ...tdStyle, color: '#64748b' }}>{u.email}</td>
+                        <td style={{ ...tdStyle, fontWeight: "bold" }}>
+                          {u.name}
+                        </td>
+                        <td style={{ ...tdStyle, color: "#64748b" }}>
+                          {u.email}
+                        </td>
                         <td style={tdStyle}>
-                          <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', background: u.role === 'ADMIN' ? '#fee2e2' : '#e0f2fe', color: u.role === 'ADMIN' ? '#b91c1c' : '#0369a1' }}>
+                          <span
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: "20px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              background:
+                                u.role === "ADMIN" ? "#fee2e2" : "#e0f2fe",
+                              color: u.role === "ADMIN" ? "#b91c1c" : "#0369a1",
+                            }}
+                          >
                             {u.role}
                           </span>
                         </td>
-                        <td style={{ ...tdStyle, color: '#64748b' }}>{u._count?.documents || 0}</td>
+                        <td style={{ ...tdStyle, color: "#64748b" }}>
+                          {u._count?.documents || 0}
+                        </td>
                         <td style={tdStyle}>
-                          <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', background: u.is_active ? '#dcfce7' : '#fee2e2', color: u.is_active ? '#16a34a' : '#b91c1c' }}>
-                            {u.is_active ? 'Hoạt động' : 'Đã khóa'}
+                          <span
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: "20px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              background: u.is_active ? "#dcfce7" : "#fee2e2",
+                              color: u.is_active ? "#16a34a" : "#b91c1c",
+                            }}
+                          >
+                            {u.is_active ? "Hoạt động" : "Đã khóa"}
                           </span>
                         </td>
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <button onClick={() => handleToggleUser(u.id)} style={{ padding: '6px 12px', background: u.is_active ? '#fee2e2' : '#dcfce7', color: u.is_active ? '#b91c1c' : '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
-                              {u.is_active ? '🔒 Khóa' : '🔓 Mở'}
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                              justifyContent: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <button
+                              onClick={() => handleToggleUser(u.id)}
+                              style={{
+                                padding: "6px 12px",
+                                background: u.is_active ? "#fee2e2" : "#dcfce7",
+                                color: u.is_active ? "#b91c1c" : "#16a34a",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "11px",
+                              }}
+                            >
+                              {u.is_active ? "🔒 Khóa" : "🔓 Mở"}
                             </button>
-                            <button onClick={() => handleChangeRole(u.id, u.role)} style={{ padding: '6px 12px', background: '#f3e8ff', color: '#7c3aed', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+                            <button
+                              onClick={() => handleChangeRole(u.id, u.role)}
+                              style={{
+                                padding: "6px 12px",
+                                background: "#f3e8ff",
+                                color: "#7c3aed",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "11px",
+                              }}
+                            >
                               👑 Role
                             </button>
-                            {u.role !== 'ADMIN' && <button disabled={deletingUser !== null} onClick={() => handleDeleteUser(u)} style={{ padding: '6px 12px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: '6px', cursor: deletingUser !== null ? 'wait' : 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
-                              {deletingUser === u.id ? 'Đang xóa…' : '🗑️ Xóa tài khoản'}
-                            </button>}
-                            <button onClick={() => handleResetPassword(u.id, u.name)} style={{ padding: '6px 12px', background: '#fef3c7', color: '#d97706', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+                            {u.role !== "ADMIN" && (
+                              <button
+                                disabled={deletingUser !== null}
+                                onClick={() => handleDeleteUser(u)}
+                                style={{
+                                  padding: "6px 12px",
+                                  background: "#b91c1c",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  cursor:
+                                    deletingUser !== null ? "wait" : "pointer",
+                                  fontWeight: "bold",
+                                  fontSize: "11px",
+                                }}
+                              >
+                                {deletingUser === u.id
+                                  ? "Đang xóa…"
+                                  : "🗑️ Xóa tài khoản"}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleResetPassword(u.id, u.name)}
+                              style={{
+                                padding: "6px 12px",
+                                background: "#fef3c7",
+                                color: "#d97706",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "11px",
+                              }}
+                            >
                               🔑 Reset pass
                             </button>
                           </div>
@@ -425,65 +1035,278 @@ function AdminDashboard() {
 
                 {/* PAGINATION USERS */}
                 {userPagination.totalPages > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
-                    <button onClick={() => { const p = Math.max(1, userPage - 1); setUserPage(p); fetchUsers(userSearch, p); }} disabled={userPage === 1}
-                      style={{ padding: '7px 14px', borderRadius: '7px', border: '1px solid #e2e8f0', background: userPage === 1 ? '#f1f5f9' : '#fff', cursor: userPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#555', fontSize: '13px' }}>← Trước</button>
-                    <span style={{ padding: '7px 14px', color: '#64748b', fontSize: '13px' }}>Trang {userPage} / {userPagination.totalPages}</span>
-                    <button onClick={() => { const p = Math.min(userPagination.totalPages, userPage + 1); setUserPage(p); fetchUsers(userSearch, p); }} disabled={userPage === userPagination.totalPages}
-                      style={{ padding: '7px 14px', borderRadius: '7px', border: '1px solid #e2e8f0', background: userPage === userPagination.totalPages ? '#f1f5f9' : '#fff', cursor: userPage === userPagination.totalPages ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#555', fontSize: '13px' }}>Sau →</button>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "8px",
+                      marginTop: "16px",
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        const p = Math.max(1, userPage - 1);
+                        setUserPage(p);
+                        fetchUsers(userSearch, p);
+                      }}
+                      disabled={userPage === 1}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "7px",
+                        border: "1px solid #e2e8f0",
+                        background: userPage === 1 ? "#f1f5f9" : "#fff",
+                        cursor: userPage === 1 ? "not-allowed" : "pointer",
+                        fontWeight: "bold",
+                        color: "#555",
+                        fontSize: "13px",
+                      }}
+                    >
+                      ← Trước
+                    </button>
+                    <span
+                      style={{
+                        padding: "7px 14px",
+                        color: "#64748b",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Trang {userPage} / {userPagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const p = Math.min(
+                          userPagination.totalPages,
+                          userPage + 1,
+                        );
+                        setUserPage(p);
+                        fetchUsers(userSearch, p);
+                      }}
+                      disabled={userPage === userPagination.totalPages}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "7px",
+                        border: "1px solid #e2e8f0",
+                        background:
+                          userPage === userPagination.totalPages
+                            ? "#f1f5f9"
+                            : "#fff",
+                        cursor:
+                          userPage === userPagination.totalPages
+                            ? "not-allowed"
+                            : "pointer",
+                        fontWeight: "bold",
+                        color: "#555",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Sau →
+                    </button>
                   </div>
                 )}
               </>
             )}
 
             {/* TAB: DANH MỤC */}
-            {tab === 'categories' && (
+            {tab === "categories" && (
               <div>
                 {/* FORM THÊM MỚI */}
-                <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
-                  <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Tên danh mục..." required
-                    style={{ flex: 2, minWidth: '160px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }} />
-                  <input value={newCatDesc} onChange={e => setNewCatDesc(e.target.value)} placeholder="Mô tả (không bắt buộc)..."
-                    style={{ flex: 3, minWidth: '200px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }} />
-                  <button type="submit" style={{ padding: '10px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>+ Thêm</button>
+                <form
+                  onSubmit={handleAddCategory}
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    marginBottom: "24px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <input
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    placeholder="Tên danh mục..."
+                    required
+                    style={{
+                      flex: 2,
+                      minWidth: "160px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      outline: "none",
+                      fontSize: "14px",
+                    }}
+                  />
+                  <input
+                    value={newCatDesc}
+                    onChange={(e) => setNewCatDesc(e.target.value)}
+                    placeholder="Mô tả (không bắt buộc)..."
+                    style={{
+                      flex: 3,
+                      minWidth: "200px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      outline: "none",
+                      fontSize: "14px",
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    style={{
+                      padding: "10px 20px",
+                      background: "#3b82f6",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "14px",
+                    }}
+                  >
+                    + Thêm
+                  </button>
                 </form>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
+                    <tr style={{ background: "#f8fafc" }}>
                       <th style={thStyle}>Tên danh mục</th>
                       <th style={thStyle}>Mô tả</th>
                       <th style={thStyle}>Số tài liệu</th>
-                      <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>
+                        Hành động
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {categories.map(cat => (
+                    {categories.map((cat) => (
                       <tr key={cat.id}>
                         <td style={tdStyle}>
                           {editingCat?.id === cat.id ? (
-                            <input value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
-                              style={{ padding: '6px 10px', borderRadius: '6px', border: '2px solid #3b82f6', outline: 'none', fontSize: '14px', width: '100%' }} />
-                          ) : <b>{cat.name}</b>}
+                            <input
+                              value={editingCat.name}
+                              onChange={(e) =>
+                                setEditingCat({
+                                  ...editingCat,
+                                  name: e.target.value,
+                                })
+                              }
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "2px solid #3b82f6",
+                                outline: "none",
+                                fontSize: "14px",
+                                width: "100%",
+                              }}
+                            />
+                          ) : (
+                            <b>{cat.name}</b>
+                          )}
                         </td>
-                        <td style={{ ...tdStyle, color: '#64748b' }}>
+                        <td style={{ ...tdStyle, color: "#64748b" }}>
                           {editingCat?.id === cat.id ? (
-                            <input value={editingCat.description || ''} onChange={e => setEditingCat({ ...editingCat, description: e.target.value })}
-                              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px', width: '100%' }} />
-                          ) : cat.description || '—'}
+                            <input
+                              value={editingCat.description || ""}
+                              onChange={(e) =>
+                                setEditingCat({
+                                  ...editingCat,
+                                  description: e.target.value,
+                                })
+                              }
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #e2e8f0",
+                                outline: "none",
+                                fontSize: "14px",
+                                width: "100%",
+                              }}
+                            />
+                          ) : (
+                            cat.description || "—"
+                          )}
                         </td>
-                        <td style={{ ...tdStyle, color: '#64748b' }}>{cat._count?.documents || 0}</td>
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                        <td style={{ ...tdStyle, color: "#64748b" }}>
+                          {cat._count?.documents || 0}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                              justifyContent: "center",
+                            }}
+                          >
                             {editingCat?.id === cat.id ? (
                               <>
-                                <button onClick={() => handleUpdateCategory(cat.id)} style={{ padding: '6px 12px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✓ Lưu</button>
-                                <button onClick={() => setEditingCat(null)} style={{ padding: '6px 12px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✕</button>
+                                <button
+                                  onClick={() => handleUpdateCategory(cat.id)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#dcfce7",
+                                    color: "#16a34a",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  ✓ Lưu
+                                </button>
+                                <button
+                                  onClick={() => setEditingCat(null)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#f1f5f9",
+                                    color: "#64748b",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  ✕
+                                </button>
                               </>
                             ) : (
                               <>
-                                <button onClick={() => setEditingCat({ id: cat.id, name: cat.name, description: cat.description || '' })} style={{ padding: '6px 12px', background: '#fef3c7', color: '#d97706', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✏️ Sửa</button>
-                                <button onClick={() => handleDeleteCategory(cat.id)} style={{ padding: '6px 12px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🗑️ Xóa</button>
+                                <button
+                                  onClick={() =>
+                                    setEditingCat({
+                                      id: cat.id,
+                                      name: cat.name,
+                                      description: cat.description || "",
+                                    })
+                                  }
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#fef3c7",
+                                    color: "#d97706",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  ✏️ Sửa
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCategory(cat.id)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#fee2e2",
+                                    color: "#b91c1c",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  🗑️ Xóa
+                                </button>
                               </>
                             )}
                           </div>
@@ -496,90 +1319,251 @@ function AdminDashboard() {
             )}
 
             {/* TAB: BÁO CÁO */}
-            {tab === 'reports' && (
-              reports.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#10b981', fontWeight: 'bold', padding: '30px 0' }}>🎉 Không có báo cáo nào đang chờ xử lý!</p>
+            {tab === "reports" &&
+              (reports.length === 0 ? (
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "#10b981",
+                    fontWeight: "bold",
+                    padding: "30px 0",
+                  }}
+                >
+                  🎉 Không có báo cáo nào đang chờ xử lý!
+                </p>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
+                    <tr style={{ background: "#f8fafc" }}>
                       <th style={thStyle}>Tài liệu bị báo cáo</th>
                       <th style={thStyle}>Người báo cáo</th>
                       <th style={thStyle}>Lý do</th>
                       <th style={thStyle}>Ngày</th>
-                      <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>
+                        Hành động
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.map(r => (
+                    {reports.map((r) => (
                       <tr key={r.id}>
-                        <td style={{ ...tdStyle, fontWeight: 'bold' }}>
-                          <a href={`/documents/${r.document?.id}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: '#3b82f6' }}>{r.document?.title}</a>
+                        <td style={{ ...tdStyle, fontWeight: "bold" }}>
+                          <a
+                            href={`/documents/${r.document?.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ textDecoration: "none", color: "#3b82f6" }}
+                          >
+                            {r.document?.title}
+                          </a>
                         </td>
-                        <td style={{ ...tdStyle, color: '#64748b' }}>{r.user?.name}</td>
-                        <td style={{ ...tdStyle, color: '#ef4444' }}>{r.reason}</td>
-                        <td style={{ ...tdStyle, color: '#64748b' }}>{new Date(r.created_at).toLocaleDateString('vi-VN')}</td>
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <button onClick={() => { setResolvingReport(r); setResolveAction('WARN'); setResolveNote(''); }}
-                            style={{ padding: '7px 14px', background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>⚙️ Xử lý</button>
+                        <td style={{ ...tdStyle, color: "#64748b" }}>
+                          {r.user?.name}
+                        </td>
+                        <td style={{ ...tdStyle, color: "#ef4444" }}>
+                          {r.reason}
+                        </td>
+                        <td style={{ ...tdStyle, color: "#64748b" }}>
+                          {new Date(r.created_at).toLocaleDateString("vi-VN")}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          <button
+                            onClick={() => {
+                              setResolvingReport(r);
+                              setResolveAction("WARN");
+                              setResolveNote("");
+                            }}
+                            style={{
+                              padding: "7px 14px",
+                              background: "#e0f2fe",
+                              color: "#0369a1",
+                              border: "none",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                              fontSize: "12px",
+                            }}
+                          >
+                            ⚙️ Xử lý
+                          </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )
-            )}
+              ))}
 
             {/* TAB: AI KIỂM DUYỆT */}
-            {tab === 'ai' && (
+            {tab === "ai" && (
               <div>
                 {/* SUMMARY CARDS */}
                 {aiSummary && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(150px, 1fr))",
+                      gap: "12px",
+                      marginBottom: "20px",
+                    }}
+                  >
                     {[
-                      { label: 'Tổng đã phân tích', value: aiSummary.total, icon: '🤖', bg: '#ede9fe', color: '#6d28d9' },
-                      { label: 'Tự động duyệt', value: aiSummary.approved, icon: '✅', bg: '#dcfce7', color: '#16a34a' },
-                      { label: 'Tự động từ chối', value: aiSummary.rejected, icon: '❌', bg: '#fee2e2', color: '#b91c1c' },
-                      { label: 'Chờ admin xét', value: aiSummary.pending, icon: '⏳', bg: '#fef9c3', color: '#d97706' },
-                    ].map(s => (
-                      <div key={s.label} style={{ background: s.bg, padding: '14px 16px', borderRadius: '12px', textAlign: 'center', border: `1px solid ${s.bg}` }}>
-                        <div style={{ fontSize: '22px' }}>{s.icon}</div>
-                        <div style={{ fontSize: '22px', fontWeight: 'bold', color: s.color, lineHeight: 1.2 }}>{s.value}</div>
-                        <div style={{ fontSize: '11px', color: '#555', marginTop: '4px' }}>{s.label}</div>
+                      {
+                        label: "Tổng đã phân tích",
+                        value: aiSummary.total,
+                        icon: "🤖",
+                        bg: "#ede9fe",
+                        color: "#6d28d9",
+                      },
+                      {
+                        label: "Tự động duyệt",
+                        value: aiSummary.approved,
+                        icon: "✅",
+                        bg: "#dcfce7",
+                        color: "#16a34a",
+                      },
+                      {
+                        label: "Tự động từ chối",
+                        value: aiSummary.rejected,
+                        icon: "❌",
+                        bg: "#fee2e2",
+                        color: "#b91c1c",
+                      },
+                      {
+                        label: "Chờ admin xét",
+                        value: aiSummary.pending,
+                        icon: "⏳",
+                        bg: "#fef9c3",
+                        color: "#d97706",
+                      },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        style={{
+                          background: s.bg,
+                          padding: "14px 16px",
+                          borderRadius: "12px",
+                          textAlign: "center",
+                          border: `1px solid ${s.bg}`,
+                        }}
+                      >
+                        <div style={{ fontSize: "22px" }}>{s.icon}</div>
+                        <div
+                          style={{
+                            fontSize: "22px",
+                            fontWeight: "bold",
+                            color: s.color,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {s.value}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#555",
+                            marginTop: "4px",
+                          }}
+                        >
+                          {s.label}
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
                 {/* BỘ LỌC VERDICT */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>Lọc:</span>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginBottom: "16px",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      color: "#64748b",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Lọc:
+                  </span>
                   {[
-                    { value: '', label: 'Tất cả' },
-                    { value: 'APPROVE', label: '✅ Đã tự động duyệt' },
-                    { value: 'REJECT',  label: '❌ Đã tự động từ chối' },
-                    { value: 'PENDING', label: '⏳ Chờ admin' },
-                  ].map(f => (
-                    <button key={f.value} onClick={() => { setAiFilter(f.value); setAiPage(1); }}
-                      style={{ padding: '6px 14px', borderRadius: '20px', border: '1.5px solid', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', transition: '0.15s',
-                        background: aiFilter === f.value ? '#6d28d9' : '#f8fafc',
-                        color:      aiFilter === f.value ? '#fff'    : '#64748b',
-                        borderColor: aiFilter === f.value ? '#6d28d9' : '#e2e8f0',
-                      }}>{f.label}</button>
+                    { value: "", label: "Tất cả" },
+                    { value: "APPROVE", label: "✅ Đã tự động duyệt" },
+                    { value: "REJECT", label: "❌ Đã tự động từ chối" },
+                    { value: "PENDING", label: "⏳ Chờ admin" },
+                  ].map((f) => (
+                    <button
+                      key={f.value}
+                      onClick={() => {
+                        setAiFilter(f.value);
+                        setAiPage(1);
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        border: "1.5px solid",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        transition: "0.15s",
+                        background:
+                          aiFilter === f.value ? "#6d28d9" : "#f8fafc",
+                        color: aiFilter === f.value ? "#fff" : "#64748b",
+                        borderColor:
+                          aiFilter === f.value ? "#6d28d9" : "#e2e8f0",
+                      }}
+                    >
+                      {f.label}
+                    </button>
                   ))}
-                  <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#94a3b8' }}>{aiPagination.total} tài liệu</span>
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: "12px",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    {aiPagination.total} tài liệu
+                  </span>
                 </div>
 
                 {/* BẢNG */}
                 {aiLoading ? (
-                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>⏳ Đang tải...</div>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: "40px",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    ⏳ Đang tải...
+                  </div>
                 ) : aiModerated.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#94a3b8', padding: '40px 0' }}>Chưa có tài liệu nào được AI phân tích.</p>
+                  <p
+                    style={{
+                      textAlign: "center",
+                      color: "#94a3b8",
+                      padding: "40px 0",
+                    }}
+                  >
+                    Chưa có tài liệu nào được AI phân tích.
+                  </p>
                 ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        minWidth: "900px",
+                      }}
+                    >
                       <thead>
-                        <tr style={{ background: '#f8fafc' }}>
+                        <tr style={{ background: "#f8fafc" }}>
                           <th style={thStyle}>Tài liệu</th>
                           <th style={thStyle}>Người đăng</th>
                           <th style={thStyle}>Danh mục</th>
@@ -590,76 +1574,259 @@ function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {aiModerated.map(doc => {
+                        {aiModerated.map((doc) => {
                           const ai = doc.aiResult;
-                          const verdictColor  = ai?.verdict === 'APPROVE' ? '#16a34a' : ai?.verdict === 'REJECT' ? '#b91c1c' : '#d97706';
-                          const verdictBg     = ai?.verdict === 'APPROVE' ? '#dcfce7' : ai?.verdict === 'REJECT' ? '#fee2e2' : '#fef9c3';
-                          const verdictIcon   = ai?.verdict === 'APPROVE' ? '✅' : ai?.verdict === 'REJECT' ? '❌' : '⏳';
-                          const verdictLabel  = ai?.verdict === 'APPROVE' ? 'Tự động duyệt' : ai?.verdict === 'REJECT' ? 'Tự động từ chối' : 'Chờ admin';
-                          const statusColor   = doc.status === 'APPROVED' ? '#16a34a' : doc.status === 'REJECTED' ? '#b91c1c' : '#d97706';
-                          const statusBg      = doc.status === 'APPROVED' ? '#dcfce7' : doc.status === 'REJECTED' ? '#fee2e2' : '#fef9c3';
-                          const statusLabel   = doc.status === 'APPROVED' ? 'Đã duyệt' : doc.status === 'REJECTED' ? 'Đã từ chối' : 'Chờ duyệt';
-                          const conf = ai?.confidence != null ? Math.round(ai.confidence * 100) : null;
+                          const verdictColor =
+                            ai?.verdict === "APPROVE"
+                              ? "#16a34a"
+                              : ai?.verdict === "REJECT"
+                                ? "#b91c1c"
+                                : "#d97706";
+                          const verdictBg =
+                            ai?.verdict === "APPROVE"
+                              ? "#dcfce7"
+                              : ai?.verdict === "REJECT"
+                                ? "#fee2e2"
+                                : "#fef9c3";
+                          const verdictIcon =
+                            ai?.verdict === "APPROVE"
+                              ? "✅"
+                              : ai?.verdict === "REJECT"
+                                ? "❌"
+                                : "⏳";
+                          const verdictLabel =
+                            ai?.verdict === "APPROVE"
+                              ? "Tự động duyệt"
+                              : ai?.verdict === "REJECT"
+                                ? "Tự động từ chối"
+                                : "Chờ admin";
+                          const statusColor =
+                            doc.status === "APPROVED"
+                              ? "#16a34a"
+                              : doc.status === "REJECTED"
+                                ? "#b91c1c"
+                                : "#d97706";
+                          const statusBg =
+                            doc.status === "APPROVED"
+                              ? "#dcfce7"
+                              : doc.status === "REJECTED"
+                                ? "#fee2e2"
+                                : "#fef9c3";
+                          const statusLabel =
+                            doc.status === "APPROVED"
+                              ? "Đã duyệt"
+                              : doc.status === "REJECTED"
+                                ? "Đã từ chối"
+                                : "Chờ duyệt";
+                          const conf =
+                            ai?.confidence != null
+                              ? Math.round(ai.confidence * 100)
+                              : null;
 
                           return (
-                            <tr key={doc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <tr
+                              key={doc.id}
+                              style={{ borderBottom: "1px solid #f1f5f9" }}
+                            >
                               {/* Tên tài liệu */}
-                              <td style={{ ...tdStyle, maxWidth: '220px' }}>
-                                <a href={`/documents/${doc.id}`} target="_blank" rel="noopener noreferrer"
-                                  style={{ textDecoration: 'none', color: '#3b82f6', fontWeight: 'bold', fontSize: '13px',
-                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              <td style={{ ...tdStyle, maxWidth: "220px" }}>
+                                <a
+                                  href={`/documents/${doc.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    textDecoration: "none",
+                                    color: "#3b82f6",
+                                    fontWeight: "bold",
+                                    fontSize: "13px",
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                  }}
+                                >
                                   {doc.title}
                                 </a>
-                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>#{doc.id} · {doc.file_type?.split('/')[1]?.toUpperCase() || doc.file_type}</div>
+                                <div
+                                  style={{
+                                    fontSize: "11px",
+                                    color: "#94a3b8",
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  #{doc.id} ·{" "}
+                                  {doc.file_type
+                                    ?.split("/")[1]
+                                    ?.toUpperCase() || doc.file_type}
+                                </div>
                               </td>
 
                               {/* Người đăng */}
-                              <td style={{ ...tdStyle, fontSize: '13px' }}>
-                                <div style={{ fontWeight: 'bold', color: '#1a1a1a' }}>{doc.user?.name}</div>
-                                <div style={{ fontSize: '11px', color: '#94a3b8' }}>{doc.user?.email}</div>
+                              <td style={{ ...tdStyle, fontSize: "13px" }}>
+                                <div
+                                  style={{
+                                    fontWeight: "bold",
+                                    color: "#1a1a1a",
+                                  }}
+                                >
+                                  {doc.user?.name}
+                                </div>
+                                <div
+                                  style={{ fontSize: "11px", color: "#94a3b8" }}
+                                >
+                                  {doc.user?.email}
+                                </div>
                               </td>
 
                               {/* Danh mục */}
-                              <td style={{ ...tdStyle, fontSize: '12px', color: '#64748b' }}>{doc.category?.name || '—'}</td>
+                              <td
+                                style={{
+                                  ...tdStyle,
+                                  fontSize: "12px",
+                                  color: "#64748b",
+                                }}
+                              >
+                                {doc.category?.name || "—"}
+                              </td>
 
                               {/* Ngày đăng */}
-                              <td style={{ ...tdStyle, fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>
-                                {new Date(doc.created_at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              <td
+                                style={{
+                                  ...tdStyle,
+                                  fontSize: "12px",
+                                  color: "#64748b",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {new Date(doc.created_at).toLocaleString(
+                                  "vi-VN",
+                                  {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
                               </td>
 
                               {/* Kết quả AI */}
-                              <td style={{ ...tdStyle, minWidth: '140px' }}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', background: verdictBg, color: verdictColor }}>
+                              <td style={{ ...tdStyle, minWidth: "140px" }}>
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    padding: "4px 10px",
+                                    borderRadius: "8px",
+                                    fontSize: "12px",
+                                    fontWeight: "bold",
+                                    background: verdictBg,
+                                    color: verdictColor,
+                                  }}
+                                >
                                   {verdictIcon} {verdictLabel}
                                 </span>
                                 {conf != null && (
-                                  <div style={{ marginTop: '5px' }}>
+                                  <div style={{ marginTop: "5px" }}>
                                     {/* Progress bar độ tin cậy */}
-                                    <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', width: '100%', maxWidth: '120px' }}>
-                                      <div style={{ height: '100%', width: `${conf}%`, background: verdictColor, borderRadius: '4px', transition: 'width 0.5s' }} />
+                                    <div
+                                      style={{
+                                        height: "4px",
+                                        background: "#e2e8f0",
+                                        borderRadius: "4px",
+                                        overflow: "hidden",
+                                        width: "100%",
+                                        maxWidth: "120px",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          height: "100%",
+                                          width: `${conf}%`,
+                                          background: verdictColor,
+                                          borderRadius: "4px",
+                                          transition: "width 0.5s",
+                                        }}
+                                      />
                                     </div>
-                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>Độ tin cậy: <b style={{ color: verdictColor }}>{conf}%</b></div>
+                                    <div
+                                      style={{
+                                        fontSize: "10px",
+                                        color: "#94a3b8",
+                                        marginTop: "2px",
+                                      }}
+                                    >
+                                      Độ tin cậy:{" "}
+                                      <b style={{ color: verdictColor }}>
+                                        {conf}%
+                                      </b>
+                                    </div>
                                   </div>
                                 )}
                                 {ai?.model && (
-                                  <div style={{ fontSize: '10px', color: '#c4b5fd', marginTop: '2px', fontFamily: 'monospace' }}>🔬 {ai.model}</div>
+                                  <div
+                                    style={{
+                                      fontSize: "10px",
+                                      color: "#c4b5fd",
+                                      marginTop: "2px",
+                                      fontFamily: "monospace",
+                                    }}
+                                  >
+                                    🔬 {ai.model}
+                                  </div>
                                 )}
                               </td>
 
                               {/* Lý do AI */}
-                              <td style={{ ...tdStyle, maxWidth: '200px', fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>
-                                {ai?.reason || <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span>}
+                              <td
+                                style={{
+                                  ...tdStyle,
+                                  maxWidth: "200px",
+                                  fontSize: "12px",
+                                  color: "#475569",
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                {ai?.reason || (
+                                  <span
+                                    style={{
+                                      color: "#cbd5e1",
+                                      fontStyle: "italic",
+                                    }}
+                                  >
+                                    —
+                                  </span>
+                                )}
                               </td>
 
                               {/* Trạng thái tài liệu hiện tại */}
                               <td style={tdStyle}>
-                                <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', background: statusBg, color: statusColor }}>
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    padding: "3px 10px",
+                                    borderRadius: "20px",
+                                    fontSize: "11px",
+                                    fontWeight: "bold",
+                                    background: statusBg,
+                                    color: statusColor,
+                                  }}
+                                >
                                   {statusLabel}
                                 </span>
                                 {doc.reject_reason && (
-                                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '3px', maxWidth: '140px' }}
-                                    title={doc.reject_reason}>
-                                    {doc.reject_reason.slice(0, 60)}{doc.reject_reason.length > 60 ? '…' : ''}
+                                  <div
+                                    style={{
+                                      fontSize: "10px",
+                                      color: "#94a3b8",
+                                      marginTop: "3px",
+                                      maxWidth: "140px",
+                                    }}
+                                    title={doc.reject_reason}
+                                  >
+                                    {doc.reject_reason.slice(0, 60)}
+                                    {doc.reject_reason.length > 60 ? "…" : ""}
                                   </div>
                                 )}
                               </td>
@@ -673,55 +1840,168 @@ function AdminDashboard() {
 
                 {/* PAGINATION */}
                 {aiPagination.totalPages > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
-                    <button onClick={() => setAiPage(p => Math.max(1, p - 1))} disabled={aiPage === 1}
-                      style={{ padding: '7px 14px', borderRadius: '7px', border: '1px solid #e2e8f0', background: aiPage === 1 ? '#f1f5f9' : '#fff', cursor: aiPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#555', fontSize: '13px' }}>← Trước</button>
-                    <span style={{ padding: '7px 14px', color: '#64748b', fontSize: '13px' }}>Trang {aiPage} / {aiPagination.totalPages}</span>
-                    <button onClick={() => setAiPage(p => Math.min(aiPagination.totalPages, p + 1))} disabled={aiPage === aiPagination.totalPages}
-                      style={{ padding: '7px 14px', borderRadius: '7px', border: '1px solid #e2e8f0', background: aiPage === aiPagination.totalPages ? '#f1f5f9' : '#fff', cursor: aiPage === aiPagination.totalPages ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#555', fontSize: '13px' }}>Sau →</button>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "8px",
+                      marginTop: "16px",
+                    }}
+                  >
+                    <button
+                      onClick={() => setAiPage((p) => Math.max(1, p - 1))}
+                      disabled={aiPage === 1}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "7px",
+                        border: "1px solid #e2e8f0",
+                        background: aiPage === 1 ? "#f1f5f9" : "#fff",
+                        cursor: aiPage === 1 ? "not-allowed" : "pointer",
+                        fontWeight: "bold",
+                        color: "#555",
+                        fontSize: "13px",
+                      }}
+                    >
+                      ← Trước
+                    </button>
+                    <span
+                      style={{
+                        padding: "7px 14px",
+                        color: "#64748b",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Trang {aiPage} / {aiPagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setAiPage((p) =>
+                          Math.min(aiPagination.totalPages, p + 1),
+                        )
+                      }
+                      disabled={aiPage === aiPagination.totalPages}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "7px",
+                        border: "1px solid #e2e8f0",
+                        background:
+                          aiPage === aiPagination.totalPages
+                            ? "#f1f5f9"
+                            : "#fff",
+                        cursor:
+                          aiPage === aiPagination.totalPages
+                            ? "not-allowed"
+                            : "pointer",
+                        fontWeight: "bold",
+                        color: "#555",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Sau →
+                    </button>
                   </div>
                 )}
               </div>
             )}
 
             {/* TAB: THÙNG RÁC */}
-            {tab === 'trash' && (
-              trashDocs.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#10b981', fontWeight: 'bold', padding: '30px 0' }}>🎉 Thùng rác trống!</p>
+            {tab === "trash" &&
+              (trashDocs.length === 0 ? (
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "#10b981",
+                    fontWeight: "bold",
+                    padding: "30px 0",
+                  }}
+                >
+                  🎉 Thùng rác trống!
+                </p>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
+                    <tr style={{ background: "#f8fafc" }}>
                       <th style={thStyle}>Tên tài liệu</th>
                       <th style={thStyle}>Người đăng</th>
                       <th style={thStyle}>Xóa lúc</th>
-                      <th style={{ ...thStyle, textAlign: 'center' }}>Hành động</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>
+                        Hành động
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {trashDocs.map(doc => (
+                    {trashDocs.map((doc) => (
                       <tr key={doc.id}>
-                        <td style={{ ...tdStyle, color: '#94a3b8', textDecoration: 'line-through' }}>{doc.title}</td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: "#94a3b8",
+                            textDecoration: "line-through",
+                          }}
+                        >
+                          {doc.title}
+                        </td>
                         <td style={tdStyle}>{doc.user?.name}</td>
-                        <td style={{ ...tdStyle, color: '#94a3b8', fontSize: '12px' }}>{new Date(doc.deleted_at).toLocaleString('vi-VN')}</td>
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                            <button onClick={() => handleRestoreTrash(doc.id)} style={{ padding: '7px 14px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>♻️ Khôi phục</button>
-                            <button onClick={() => handlePermanentDeleteTrash(doc.id)} style={{ padding: '7px 14px', background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🗑️ Xóa vĩnh viễn</button>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: "#94a3b8",
+                            fontSize: "12px",
+                          }}
+                        >
+                          {new Date(doc.deleted_at).toLocaleString("vi-VN")}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "8px",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <button
+                              onClick={() => handleRestoreTrash(doc.id)}
+                              style={{
+                                padding: "7px 14px",
+                                background: "#dcfce7",
+                                color: "#16a34a",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                              }}
+                            >
+                              ♻️ Khôi phục
+                            </button>
+                            <button
+                              onClick={() => handlePermanentDeleteTrash(doc.id)}
+                              style={{
+                                padding: "7px 14px",
+                                background: "#fee2e2",
+                                color: "#b91c1c",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                              }}
+                            >
+                              🗑️ Xóa vĩnh viễn
+                            </button>
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )
-            )}
+              ))}
 
             {/* TAB: TOP TÀI LIỆU */}
-            {tab === 'top' && stats?.topDocs && (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            {tab === "top" && stats?.topDocs && (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: '#f8fafc' }}>
+                  <tr style={{ background: "#f8fafc" }}>
                     <th style={thStyle}>#</th>
                     <th style={thStyle}>Tên tài liệu</th>
                     <th style={thStyle}>Lượt tải</th>
@@ -731,10 +2011,30 @@ function AdminDashboard() {
                 <tbody>
                   {stats.topDocs.map((doc, i) => (
                     <tr key={doc.id}>
-                      <td style={{ ...tdStyle, fontWeight: 'bold', color: i === 0 ? '#f59e0b' : '#64748b' }}>{i + 1}</td>
-                      <td style={{ ...tdStyle, fontWeight: 'bold' }}>{doc.title}</td>
-                      <td style={{ ...tdStyle, color: '#3b82f6', fontWeight: 'bold' }}>⬇️ {doc.download_count}</td>
-                      <td style={{ ...tdStyle, color: '#64748b' }}>👁️ {doc.view_count}</td>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          fontWeight: "bold",
+                          color: i === 0 ? "#f59e0b" : "#64748b",
+                        }}
+                      >
+                        {i + 1}
+                      </td>
+                      <td style={{ ...tdStyle, fontWeight: "bold" }}>
+                        {doc.title}
+                      </td>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: "#3b82f6",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ⬇️ {doc.download_count}
+                      </td>
+                      <td style={{ ...tdStyle, color: "#64748b" }}>
+                        👁️ {doc.view_count}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -746,52 +2046,172 @@ function AdminDashboard() {
 
       {/* MODAL XỬ LÝ BÁO CÁO */}
       {resolvingReport && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={e => { if (e.target === e.currentTarget) setResolvingReport(null); }}>
-          <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', width: '460px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 'bold', color: '#1a1a1a' }}>⚙️ Xử lý báo cáo</h3>
-            <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#64748b' }}>
-              Tài liệu: <b style={{ color: '#1a1a1a' }}>{resolvingReport.document?.title}</b>
-            </p>
-            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#64748b' }}>Lý do báo cáo: <i>{resolvingReport.reason}</i></p>
+        <Modal title="Xử lý báo cáo" onClose={() => setResolvingReport(null)}>
+          <p style={{ margin: "0 0 20px", fontSize: "13px", color: "#64748b" }}>
+            Tài liệu:{" "}
+            <b style={{ color: "#1a1a1a" }}>
+              {resolvingReport.document?.title}
+            </b>
+          </p>
+          <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
+            Lý do báo cáo: <i>{resolvingReport.reason}</i>
+          </p>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold', fontSize: '13px', color: '#374151', marginBottom: '8px' }}>Chọn biện pháp xử lý:</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                  { value: 'WARN', label: '⚠️ Cảnh báo', desc: 'Gửi thông báo cảnh báo đến chủ tài liệu', color: '#fef9c3', border: '#fde047' },
-                  { value: 'REMOVE', label: '🚫 Gỡ tài liệu', desc: 'Chuyển tài liệu vào thùng rác và thông báo chủ tài liệu', color: '#fee2e2', border: '#fca5a5' },
-                  { value: 'IGNORE', label: '✓ Bỏ qua', desc: 'Báo cáo không hợp lệ, không cần xử lý', color: '#f1f5f9', border: '#cbd5e1' },
-                ].map(opt => (
-                  <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', borderRadius: '8px', border: `2px solid ${resolveAction === opt.value ? opt.border : '#e2e8f0'}`, background: resolveAction === opt.value ? opt.color : '#fff', cursor: 'pointer', transition: '0.15s' }}>
-                    <input type="radio" name="action" value={opt.value} checked={resolveAction === opt.value} onChange={() => setResolveAction(opt.value)} style={{ marginTop: '2px' }} />
-                    <div>
-                      <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#1a1a1a' }}>{opt.label}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{opt.desc}</div>
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                display: "block",
+                fontWeight: "bold",
+                fontSize: "13px",
+                color: "#374151",
+                marginBottom: "8px",
+              }}
+            >
+              Chọn biện pháp xử lý:
+            </label>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              {[
+                {
+                  value: "WARN",
+                  label: "⚠️ Cảnh báo",
+                  desc: "Gửi thông báo cảnh báo đến chủ tài liệu",
+                  color: "#fef9c3",
+                  border: "#fde047",
+                },
+                {
+                  value: "REMOVE",
+                  label: "🚫 Gỡ tài liệu",
+                  desc: "Chuyển tài liệu vào thùng rác và thông báo chủ tài liệu",
+                  color: "#fee2e2",
+                  border: "#fca5a5",
+                },
+                {
+                  value: "IGNORE",
+                  label: "✓ Bỏ qua",
+                  desc: "Báo cáo không hợp lệ, không cần xử lý",
+                  color: "#f1f5f9",
+                  border: "#cbd5e1",
+                },
+              ].map((opt) => (
+                <label
+                  key={opt.value}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "10px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    border: `2px solid ${resolveAction === opt.value ? opt.border : "#e2e8f0"}`,
+                    background:
+                      resolveAction === opt.value ? opt.color : "#fff",
+                    cursor: "pointer",
+                    transition: "0.15s",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="action"
+                    value={opt.value}
+                    checked={resolveAction === opt.value}
+                    onChange={() => setResolveAction(opt.value)}
+                    style={{ marginTop: "2px" }}
+                  />
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: "bold",
+                        fontSize: "14px",
+                        color: "#1a1a1a",
+                      }}
+                    >
+                      {opt.label}
                     </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold', fontSize: '13px', color: '#374151', marginBottom: '6px' }}>Ghi chú (không bắt buộc):</label>
-              <textarea value={resolveNote} onChange={e => setResolveNote(e.target.value)} rows={2} placeholder="Ghi chú thêm về quyết định xử lý..."
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setResolvingReport(null)}
-                style={{ padding: '10px 20px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                Hủy
-              </button>
-              <button onClick={() => handleResolveReport(resolvingReport.id)}
-                style={{ padding: '10px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                Xác nhận xử lý
-              </button>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#64748b",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {opt.desc}
+                    </div>
+                  </div>
+                </label>
+              ))}
             </div>
           </div>
-        </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label
+              style={{
+                display: "block",
+                fontWeight: "bold",
+                fontSize: "13px",
+                color: "#374151",
+                marginBottom: "6px",
+              }}
+            >
+              Ghi chú (không bắt buộc):
+            </label>
+            <textarea
+              value={resolveNote}
+              onChange={(e) => setResolveNote(e.target.value)}
+              rows={2}
+              placeholder="Ghi chú thêm về quyết định xử lý..."
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                outline: "none",
+                fontSize: "13px",
+                resize: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              justifyContent: "flex-end",
+            }}
+          >
+            <button
+              onClick={() => setResolvingReport(null)}
+              style={{
+                padding: "10px 20px",
+                background: "#f1f5f9",
+                color: "#64748b",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              onClick={() => handleResolveReport(resolvingReport.id)}
+              style={{
+                padding: "10px 20px",
+                background: "#3b82f6",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+              }}
+            >
+              Xác nhận xử lý
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

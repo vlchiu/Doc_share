@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { Compass, ArrowLeft } from 'lucide-react';
 
 function NotFound() {

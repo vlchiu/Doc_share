@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, CheckCheck, Clock, ExternalLink } from 'lucide-react';
-import axiosClient from '../api/axiosClient';
+import { ErrorState, LoadingState } from "./docshare/ResourceState";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion as Motion, AnimatePresence } from "framer-motion";
+import { Bell, CheckCheck, Clock, ExternalLink } from "lucide-react";
+import axiosClient from "../api/axiosClient";
 
 function NotificationBell() {
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unread, setUnread] = useState(0);
@@ -12,12 +15,17 @@ function NotificationBell() {
   const navigate = useNavigate();
 
   const fetchNotifications = async () => {
-    if (!localStorage.getItem('token')) return;
+    if (!localStorage.getItem("token")) return;
+    setError(null);
     try {
-      const res = await axiosClient.get('/notifications');
+      const res = await axiosClient.get("/notifications");
       setNotifications(res.data.notifications || []);
       setUnread(res.data.unreadCount || 0);
-    } catch {}
+    } catch (err) {
+      setError({ status: err.response?.status || 0 });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -30,18 +38,18 @@ function NotificationBell() {
     const handleClick = (e) => {
       if (!ref.current?.contains(e.target)) setOpen(false);
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   const handleOpen = async () => {
-    setOpen(o => !o);
+    setOpen((o) => !o);
     if (!open && unread > 0) {
       try {
-        await axiosClient.put('/notifications/read-all');
+        await axiosClient.put("/notifications/read-all");
         setUnread(0);
-        setNotifications(n => n.map(x => ({ ...x, is_read: true })));
-      } catch {}
+        setNotifications((n) => n.map((x) => ({ ...x, is_read: true })));
+      } catch { /* Keep unread indicators when the server cannot mark them read. */ }
     }
   };
 
@@ -51,30 +59,45 @@ function NotificationBell() {
   };
 
   return (
-    <div ref={ref} className="relative">
-      <motion.button
+    <div
+      ref={ref}
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          setOpen(false);
+          ref.current?.querySelector("button")?.focus();
+        }
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+      }}
+    >
+      <Motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleOpen}
         className="relative flex items-center justify-center w-10 h-10 rounded-full border border-slate-200/80 bg-white/80 hover:bg-white text-slate-700 hover:text-indigo-600 shadow-sm backdrop-blur-md transition-colors cursor-pointer"
         aria-label="Thông báo"
+        aria-expanded={open}
+        aria-controls="notification-list"
       >
         <Bell className="w-4 h-4" />
         {unread > 0 && (
           <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white animate-pulse">
-            {unread > 9 ? '9+' : unread}
+            {unread > 9 ? "9+" : unread}
           </span>
         )}
-      </motion.button>
+      </Motion.button>
 
       <AnimatePresence>
         {open && (
-          <motion.div
+          <Motion.div
+            id="notification-list"
             initial={{ opacity: 0, y: 10, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="absolute right-0 top-12 w-80 sm:w-96 rounded-2xl border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-xl z-50 overflow-hidden"
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="absolute right-0 top-12 w-[min(80vw,320px)] sm:w-96 rounded-2xl border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-xl z-50 overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 bg-slate-50/60">
@@ -82,7 +105,9 @@ function NotificationBell() {
                 <div className="p-1 rounded-lg bg-indigo-50 text-indigo-600">
                   <Bell className="w-4 h-4" />
                 </div>
-                <span className="font-bold text-sm text-slate-800">Thông báo</span>
+                <span className="font-bold text-sm text-slate-800">
+                  Thông báo
+                </span>
               </div>
               {unread === 0 && notifications.length > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
@@ -93,22 +118,33 @@ function NotificationBell() {
 
             {/* Notification List */}
             <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-100/80">
-              {notifications.length === 0 ? (
+              {error ? (
+                <ErrorState error={error} onRetry={fetchNotifications} />
+              ) : loading ? (
+                <LoadingState />
+              ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-2">
                     <Bell className="w-5 h-5 opacity-50" />
                   </div>
-                  <p className="text-sm font-semibold text-slate-600">Chưa có thông báo mới</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Các thông báo mới sẽ xuất hiện tại đây.</p>
+                  <p className="text-sm font-semibold text-slate-600">
+                    Chưa có thông báo mới
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Các thông báo mới sẽ xuất hiện tại đây.
+                  </p>
                 </div>
               ) : (
                 notifications.map((n) => (
-                  <div
+                  <button
+                    type="button"
                     key={n.id}
                     onClick={() => handleClickNotification(n)}
-                    className={`group p-3.5 transition-colors text-left flex gap-3 items-start ${
-                      n.link ? 'cursor-pointer hover:bg-indigo-50/50' : 'cursor-default'
-                    } ${n.is_read ? 'bg-transparent' : 'bg-indigo-50/30'}`}
+                    className={`w-full group p-3.5 transition-colors text-left flex gap-3 items-start ${
+                      n.link
+                        ? "cursor-pointer hover:bg-indigo-50/50"
+                        : "cursor-default"
+                    } ${n.is_read ? "bg-transparent" : "bg-indigo-50/30"}`}
                   >
                     <div className="mt-1 shrink-0">
                       {!n.is_read ? (
@@ -118,12 +154,16 @@ function NotificationBell() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs leading-relaxed ${n.is_read ? 'text-slate-600' : 'text-slate-900 font-medium'}`}>
+                      <p
+                        className={`text-xs leading-relaxed ${n.is_read ? "text-slate-600" : "text-slate-900 font-medium"}`}
+                      >
                         {n.content}
                       </p>
                       <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-400">
                         <Clock className="w-3 h-3" />
-                        <span>{new Date(n.created_at).toLocaleString('vi-VN')}</span>
+                        <span>
+                          {new Date(n.created_at).toLocaleString("vi-VN")}
+                        </span>
                         {n.link && (
                           <span className="ml-auto inline-flex items-center gap-0.5 text-indigo-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
                             Xem <ExternalLink className="w-3 h-3" />
@@ -131,11 +171,11 @@ function NotificationBell() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

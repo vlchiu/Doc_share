@@ -1,53 +1,62 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { DownloadCloud, Trash2, Calendar, FileText, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react';
-import toast from 'react-hot-toast';
-import axiosClient from '../api/axiosClient';
-import Spinner from '../components/Spinner';
-import { getFileLabel } from '../utils/fileHelper';
+import useRemoteData from "../hooks/useRemoteData";
+import { ErrorState } from "../components/docshare/ResourceState";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  DownloadCloud,
+  Trash2,
+  Calendar,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  FolderOpen,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import axiosClient from "../api/axiosClient";
+import Spinner from "../components/Spinner";
+import { getFileLabel } from "../utils/fileHelper";
 
 function DownloadHistory() {
-  const [history, setHistory] = useState([]);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-
-  const fetchHistory = () => {
-    setLoading(true);
-    axiosClient
-      .get(`/documents/history?page=${page}`)
-      .then((res) => {
-        setHistory(res.data.history || []);
-        setPagination(res.data.pagination || { total: 0, page: 1, totalPages: 1 });
-      })
-      .catch(() => toast.error('Lỗi khi tải lịch sử tải xuống!'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchHistory();
-  }, [page]);
+  const { data, setData, loading, error, retry } = useRemoteData(
+    `/documents/history?page=${page}`,
+  );
+  const history = data?.history || [];
+  const pagination = data?.pagination || { total: 0, page: 1, totalPages: 1 };
+  const setHistory = (update) =>
+    setData((previous) => ({
+      ...previous,
+      history:
+        typeof update === "function" ? update(previous.history || []) : update,
+    }));
+  const setPagination = (update) =>
+    setData((previous) => ({
+      ...previous,
+      pagination:
+        typeof update === "function" ? update(previous.pagination) : update,
+    }));
 
   const handleDelete = async (historyId) => {
     try {
       await axiosClient.delete(`/documents/history/${historyId}`);
       setHistory((h) => h.filter((item) => item.id !== historyId));
       setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
-      toast.success('Đã xóa khỏi lịch sử!');
+      toast.success("Đã xóa khỏi lịch sử!");
     } catch {
-      toast.error('Lỗi khi xóa!');
+      toast.error("Lỗi khi xóa!");
     }
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('Bạn có chắc muốn xóa toàn bộ lịch sử tải xuống?')) return;
+    if (!window.confirm("Bạn có chắc muốn xóa toàn bộ lịch sử tải xuống?"))
+      return;
     try {
-      await axiosClient.delete('/documents/history/clear');
+      await axiosClient.delete("/documents/history/clear");
       setHistory([]);
       setPagination({ total: 0, page: 1, totalPages: 1 });
-      toast.success('Đã dọn sạch toàn bộ lịch sử!');
+      toast.success("Đã dọn sạch toàn bộ lịch sử!");
     } catch {
-      toast.error('Lỗi!');
+      toast.error("Lỗi!");
     }
   };
 
@@ -59,6 +68,15 @@ function DownloadHistory() {
     );
   }
 
+  if (error)
+    return (
+      <ErrorState
+        error={error}
+        onRetry={retry}
+        title="Không tải được lịch sử tải xuống"
+      />
+    );
+
   return (
     <div className="space-y-6">
       {/* ── HEADER BENTO ── */}
@@ -67,9 +85,13 @@ function DownloadHistory() {
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-indigo-300 text-xs font-bold mb-3 border border-white/10">
             <DownloadCloud className="w-3.5 h-3.5" /> Nhật ký tải về
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Lịch sử tải xuống</h1>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+            Lịch sử tải xuống
+          </h1>
           <p className="text-xs sm:text-sm text-slate-300 mt-1">
-            Tổng cộng <span className="font-bold text-white">{pagination.total}</span> lượt tải đã được ghi nhận.
+            Tổng cộng{" "}
+            <span className="font-bold text-white">{pagination.total}</span>{" "}
+            lượt tải đã được ghi nhận.
           </p>
         </div>
 
@@ -89,9 +111,12 @@ function DownloadHistory() {
           <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4">
             <DownloadCloud className="w-8 h-8 opacity-60" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">Chưa có lượt tải nào</h3>
+          <h3 className="text-base font-bold text-slate-800">
+            Chưa có lượt tải nào
+          </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            Khi bạn tải xuống bất kỳ tài liệu nào trên hệ thống, lịch sử sẽ được hiển thị ở đây.
+            Khi bạn tải xuống bất kỳ tài liệu nào trên hệ thống, lịch sử sẽ được
+            hiển thị ở đây.
           </p>
         </div>
       ) : (
@@ -110,7 +135,23 @@ function DownloadHistory() {
               <tbody className="divide-y divide-slate-100">
                 {history.map((item) => {
                   const doc = item.document;
-                  if (!doc) return null;
+                  if (!doc)
+                    return (
+                      <tr key={item.id}>
+                        <td colSpan={4} className="px-6 py-4 text-slate-500">
+                          Tài liệu không còn khả dụng
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            aria-label="Xóa mục không còn khả dụng"
+                            className="ds-icon-button"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
                   const fileLabel = getFileLabel(doc.file_type, doc.file_url);
 
                   return (
@@ -128,7 +169,7 @@ function DownloadHistory() {
                         </Link>
                       </td>
                       <td className="py-4 px-4 text-slate-500 font-medium">
-                        {doc.category?.name || 'Chung'}
+                        {doc.category?.name || "Chung"}
                       </td>
                       <td className="py-4 px-4">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-slate-100 text-slate-700">
@@ -136,7 +177,7 @@ function DownloadHistory() {
                         </span>
                       </td>
                       <td className="py-4 px-4 text-slate-400">
-                        {new Date(item.created_at).toLocaleString('vi-VN')}
+                        {new Date(item.created_at).toLocaleString("vi-VN")}
                       </td>
                       <td className="py-4 px-6 text-right">
                         <button
@@ -163,13 +204,17 @@ function DownloadHistory() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  aria-label="Trang trước"
                   disabled={page === 1}
                   className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                  onClick={() =>
+                    setPage((p) => Math.min(pagination.totalPages, p + 1))
+                  }
+                  aria-label="Trang sau"
                   disabled={page === pagination.totalPages}
                   className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 >

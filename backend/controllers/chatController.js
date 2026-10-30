@@ -29,7 +29,7 @@ async function parsePdfBuffer(buffer) {
 }
 
 // Helper: Lấy Buffer file từ đĩa cục bộ hoặc URL
-async function getFileBuffer(fileUrl) {
+async function getFileBuffer(fileUrl, signal) {
   if (!fileUrl) return null;
 
   // 1. File cục bộ trên máy chủ
@@ -48,6 +48,7 @@ async function getFileBuffer(fileUrl) {
   // 2. File từ URL bên ngoài (Cloudinary, ngrok, v.v.)
   try {
     const response = await axios.get(fileUrl, {
+      signal,
       responseType: 'arraybuffer',
       timeout: 15000,
       headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -60,14 +61,14 @@ async function getFileBuffer(fileUrl) {
 }
 
 // ── Extract text từ tài liệu ──────────────────────────────────────────────────
-async function extractDocumentText(doc) {
+async function extractDocumentText(doc, signal) {
   const cacheKey = `${doc.id}:${doc.content_version}`;
   if (docContentCache.has(cacheKey)) return docContentCache.get(cacheKey);
 
   let text = '';
   try {
     const source = sourceForDocument(doc);
-    const buffer = source.path ? await fs.promises.readFile(source.path) : await getFileBuffer(source.url);
+    const buffer = source.path ? await fs.promises.readFile(source.path) : await getFileBuffer(source.url, signal);
     if (buffer) {
       const fileType = (doc.file_type || '').toLowerCase();
       const fileUrl = (doc.file_url || '').toLowerCase();
@@ -100,7 +101,7 @@ async function extractDocumentText(doc) {
 }
 
 // ── Gọi Gemini API với cơ chế tự động thử model dự phòng ──────────────────────
-async function callGemini(systemPrompt, history, userMessage) {
+async function callGemini(systemPrompt, history, userMessage, signal) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('NO_GEMINI_KEY');
 
@@ -139,6 +140,7 @@ async function callGemini(systemPrompt, history, userMessage) {
 
   let lastError = null;
   for (const modelName of candidateModels) {
+    signal?.throwIfAborted();
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,
@@ -149,7 +151,7 @@ async function callGemini(systemPrompt, history, userMessage) {
         history: sanitizedHistory,
       });
 
-      const result = await chat.sendMessage(userMessage);
+      const result = await chat.sendMessage(userMessage, { signal, timeout: 20000 });
       const reply = result.response.text();
       if (reply) return { reply, modelUsed: modelName };
     } catch (err) {
@@ -162,7 +164,7 @@ async function callGemini(systemPrompt, history, userMessage) {
 }
 
 // ── Fallback gọi Groq (nếu máy chủ cấu hình GROQ_API_KEY) ────────────────────
-async function callGroq(systemPrompt, history, userMessage) {
+async function callGroq(systemPrompt, history, userMessage, signal) {
   if (!process.env.GROQ_API_KEY) throw new Error('NO_GROQ_KEY');
 
   const messages = [
@@ -174,27 +176,8 @@ async function callGroq(systemPrompt, history, userMessage) {
     { role: 'user', content: userMessage },
   ];
 
-  const response = await axios.post(
-    'https://api.groq.com/openai/v1/chat/completions',
-    {
-      model: 'llama-3.3-70b-versatile',
-      messages,
-      max_tokens: 2048,
-      temperature: 0.7,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 25000,
-    }
-  );
-
-  return {
-    reply: response.data.choices?.[0]?.message?.content || 'Không có phản hồi',
-    modelUsed: 'llama-3.3-70b-versatile'
-  };
+  const result = await require('../services/groq.service').complete(messages, { signal });
+  return { ...result, reply: result.reply || 'Không có phản hồi' };
 }
 
 // ── Tra cứu thời tiết trực tiếp thời gian thực (Open-Meteo API) ───────────────
@@ -240,7 +223,7 @@ const WEATHER_CODES = {
   99: 'Dông bão mạnh kèm mưa đá'
 };
 
-async function fetchLiveWeather(query) {
+async function fetchLiveWeather(query, signal) {
   const lower = query.toLowerCase();
   const isWeather = /thời tiết|nhiệt độ|trời mưa|trời nắng|mưa không|dự báo thời tiết|weather|temperature|cảm giác như/i.test(lower);
   if (!isWeather) return null;
@@ -261,7 +244,7 @@ async function fetchLiveWeather(query) {
       try {
         const geoRes = await axios.get(
           `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=vi&format=json`,
-          { timeout: 3500 }
+          { timeout: 3500, signal }
         );
         const geo = geoRes.data?.results?.[0];
         if (geo) {
@@ -274,7 +257,7 @@ async function fetchLiveWeather(query) {
 
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${target.lat}&longitude=${target.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`;
-    const res = await axios.get(url, { timeout: 4500 });
+    const res = await axios.get(url, { timeout: 4500, signal });
     const c = res.data.current;
     const desc = WEATHER_CODES[c.weather_code] || 'Thời tiết bình thường';
     return `DỮ LIỆU THỜI TIẾT TRỰC TIẾP THỜI GIAN THỰC (TỪ TRẠM KHÍ TƯỢNG VỆ TINH):
@@ -292,7 +275,7 @@ async function fetchLiveWeather(query) {
 }
 
 // ── Tra cứu bách khoa / kiến thức trực tiếp (Wikipedia API) ───────────────────
-async function fetchLiveKnowledge(query) {
+async function fetchLiveKnowledge(query, signal) {
   const lower = query.toLowerCase();
   const isDocSpecific = /tài liệu này|file này|đoạn code này|tác giả này|trong file|tóm tắt tài liệu/i.test(lower);
   if (isDocSpecific) return null;
@@ -310,7 +293,7 @@ async function fetchLiveKnowledge(query) {
       `https://vi.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQuery)}&format=json&origin=*`,
       {
         headers: { 'User-Agent': 'DocShareAI/1.0 (contact@docshare.vn)' },
-        timeout: 3500
+        timeout: 3500, signal
       }
     );
 
@@ -366,9 +349,9 @@ const chatWithDocument = async (req, res) => {
 
     // 1. Trích xuất văn bản tài liệu song song với tìm kiếm dữ liệu thời gian thực
     const [docText, liveWeather, liveKnowledge] = await Promise.all([
-      extractDocumentText(doc),
-      fetchLiveWeather(message.trim()),
-      fetchLiveKnowledge(message.trim()),
+      extractDocumentText(doc, req.signal),
+      fetchLiveWeather(message.trim(), req.signal),
+      fetchLiveKnowledge(message.trim(), req.signal),
     ]);
 
     let liveDataSection = '';
@@ -399,21 +382,23 @@ NGUYÊN TẮC TRẢ LỜI:
    - Tuyệt đối KHÔNG từ chối hoặc nói rằng mình "không có kết nối internet/trạm khí tượng". Hệ thống đã kết nối dữ liệu sẵn cho bạn!
 4. KHI NGƯỜI DÙNG HỎI VỀ TÀI LIỆU: Ưu tiên trả lời sát với nội dung trích xuất từ tài liệu đang xem.`;
 
+    req.signal?.throwIfAborted();
     let result = null;
 
     // 1. Ưu tiên Gemini API
     if (process.env.GEMINI_API_KEY) {
       try {
-        result = await callGemini(systemPrompt, history, message.trim());
+        result = await callGemini(systemPrompt, history, message.trim(), req.signal);
       } catch (geminiErr) {
         console.error('Lỗi Gemini Copilot:', geminiErr.message);
       }
     }
 
     // 2. Dự phòng Groq API
+    req.signal?.throwIfAborted();
     if (!result && process.env.GROQ_API_KEY) {
       try {
-        result = await callGroq(systemPrompt, history, message.trim());
+        result = await callGroq(systemPrompt, history, message.trim(), req.signal);
       } catch (groqErr) {
         console.error('Lỗi Groq Copilot:', groqErr.message);
       }
@@ -455,8 +440,8 @@ const chatGeneral = async (req, res) => {
     });
 
     const [liveWeather, liveKnowledge] = await Promise.all([
-      fetchLiveWeather(message.trim()),
-      fetchLiveKnowledge(message.trim()),
+      fetchLiveWeather(message.trim(), req.signal),
+      fetchLiveKnowledge(message.trim(), req.signal),
     ]);
 
     let liveDataSection = '';
@@ -472,15 +457,17 @@ NGUYÊN TẮC:
 2. Dùng Markdown khi cần (tiêu đề, bullet, code block).
 3. Nếu hỏi về thời tiết/thời gian, dùng dữ liệu thực tế đã cung cấp.`;
 
+    req.signal?.throwIfAborted();
     let result = null;
 
     if (process.env.GEMINI_API_KEY) {
-      try { result = await callGemini(systemPrompt, history, message.trim()); }
+      try { result = await callGemini(systemPrompt, history, message.trim(), req.signal); }
       catch (e) { console.error('Gemini general error:', e.message); }
     }
 
+    req.signal?.throwIfAborted();
     if (!result && process.env.GROQ_API_KEY) {
-      try { result = await callGroq(systemPrompt, history, message.trim()); }
+      try { result = await callGroq(systemPrompt, history, message.trim(), req.signal); }
       catch (e) { console.error('Groq general error:', e.message); }
     }
 
@@ -495,5 +482,6 @@ NGUYÊN TẮC:
   }
 };
 
-module.exports = { chatWithDocument, chatGeneral };
+const { withChatDeadline } = require('../utils/chatDeadline');
+module.exports = { chatWithDocument: withChatDeadline(chatWithDocument), chatGeneral: withChatDeadline(chatGeneral) };
 

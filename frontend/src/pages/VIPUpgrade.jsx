@@ -1,5 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { createSequentialPoller } from "../utils/sequentialPoller";
+import useRemoteData from "../hooks/useRemoteData";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "../components/docshare/ResourceState";
+import { Hero, Panel } from "../components/docshare/Primitives";
+import { useState, useEffect, useRef } from "react";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
   Zap,
@@ -15,42 +23,46 @@ import {
   X,
   ShieldCheck,
   ArrowRight,
-  Clock
-} from 'lucide-react';
-import toast from 'react-hot-toast';
-import axiosClient from '../api/axiosClient';
+  Clock,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import axiosClient from "../api/axiosClient";
 
 const PLAN_META = {
   1: {
     icon: Zap,
-    title: 'Gói 1 Tháng',
-    badge: 'Cơ bản',
-    color: 'from-blue-600 to-indigo-600',
-    border: 'border-blue-200',
+    title: "Gói 1 Tháng",
+    badge: "Cơ bản",
+    color: "from-blue-600 to-indigo-600",
+    border: "border-blue-200",
   },
   3: {
     icon: Flame,
-    title: 'Gói 3 Tháng',
-    badge: 'Phổ biến nhất',
+    title: "Gói 3 Tháng",
+    badge: "Phổ biến nhất",
     popular: true,
-    color: 'from-indigo-600 via-purple-600 to-pink-600',
-    border: 'border-purple-300 ring-2 ring-purple-500/20',
+    color: "from-indigo-600 via-purple-600 to-pink-600",
+    border: "border-purple-300 ring-2 ring-purple-500/20",
   },
   12: {
     icon: Crown,
-    title: 'Gói 1 Năm',
-    badge: 'Tiết kiệm nhất',
-    color: 'from-amber-500 to-orange-600',
-    border: 'border-amber-200',
+    title: "Gói 1 Năm",
+    badge: "Tiết kiệm nhất",
+    color: "from-amber-500 to-orange-600",
+    border: "border-amber-200",
   },
 };
 
 function VIPUpgrade({ onVIPActivated }) {
-  const [plans, setPlans] = useState([]);
+  const {
+    data: plans = [],
+    loading: plansLoading,
+    error: plansError,
+    retry: retryPlans,
+  } = useRemoteData("/payment/plans");
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(3);
-  const [provider, setProvider] = useState('SEPAY');
-  const [user, setUser] = useState(null);
+  const { data: user, retry: refreshUser } = useRemoteData("/auth/me");
 
   // SePay QR state
   const [sepayOrder, setSepayOrder] = useState(null);
@@ -59,100 +71,127 @@ function VIPUpgrade({ onVIPActivated }) {
   const [copiedAccount, setCopiedAccount] = useState(false);
   const pollRef = useRef(null);
 
+  const [statusError, setStatusError] = useState("");
+  const activation = useRef(onVIPActivated);
   useEffect(() => {
-    axiosClient.get('/payment/plans').then((res) => {
-      setPlans(res.data || []);
-      if (res.data?.length > 0 && !selectedPlan) {
-        setSelectedPlan(res.data[1]?.key || res.data[0]?.key);
-      }
-    });
-    axiosClient.get('/auth/me').then((res) => setUser(res.data));
-    return () => clearInterval(pollRef.current);
-  }, []);
-
-  const formatPrice = (amount) => amount.toLocaleString('vi-VN') + 'đ';
-
-  const startPolling = (orderId) => {
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await axiosClient.get(`/payment/sepay/status/${orderId}`);
-        if (res.data.status === 'SUCCESS') {
-          clearInterval(pollRef.current);
-          toast.success('🎉 Thanh toán thành công! Tài khoản VIP đã được kích hoạt.');
+    activation.current = onVIPActivated;
+  }, [onVIPActivated]);
+  const createRequest = useRef(null);
+  useEffect(() => () => createRequest.current?.abort(), []);
+  useEffect(() => {
+    if (!sepayOrder) return;
+    const poller = createSequentialPoller({
+      task: (signal) =>
+        axiosClient.get(`/payment/sepay/status/${sepayOrder.orderId}`, {
+          signal,
+          timeout: 15000,
+        }),
+      onResult: ({ data }) => {
+        setStatusError("");
+        if (data.status === "SUCCESS") {
+          toast.success(
+            "Thanh toán thành công! Tài khoản VIP đã được kích hoạt.",
+          );
           setSepayOrder(null);
-          if (onVIPActivated) onVIPActivated();
-          setTimeout(() => window.location.reload(), 1500);
+          refreshUser();
+          activation.current?.();
+          return false;
         }
-      } catch {}
-    }, 5000);
-  };
+        if (["FAILED", "CANCELLED", "EXPIRED"].includes(data.status)) {
+          setStatusError(
+            "Đơn thanh toán đã kết thúc và chưa được xác nhận thành công. Vui lòng liên hệ hỗ trợ nếu bạn đã chuyển tiền.",
+          );
+          return false;
+        }
+      },
+      onError: () =>
+        setStatusError(
+          "Chưa kiểm tra được giao dịch. Hệ thống sẽ thử lại; không cần chuyển khoản thêm.",
+        ),
+    });
+    pollRef.current = poller;
+    return () => {
+      poller.stop();
+      if (pollRef.current === poller) pollRef.current = null;
+    };
+  }, [sepayOrder, refreshUser]);
+  const formatPrice = (amount) => amount.toLocaleString("vi-VN") + "đ";
 
   const handlePayment = async () => {
     if (!selectedPlan) {
-      toast.error('Vui lòng chọn gói VIP');
+      toast.error("Vui lòng chọn gói VIP");
       return;
     }
+    if (createRequest.current) return;
+    const controller = new AbortController();
+    createRequest.current = controller;
     setLoading(true);
     try {
-      const res = await axiosClient.post('/payment/sepay/create', { planMonths: selectedPlan });
+      const res = await axiosClient.post(
+        "/payment/sepay/create",
+        {
+          planMonths: selectedPlan,
+        },
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
+      setCheckingStatus(false);
+      setCopiedContent(false);
+      setCopiedAccount(false);
       setSepayOrder(res.data);
-      startPolling(res.data.orderId);
+      setStatusError("");
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi tạo thanh toán');
+      if (!controller.signal.aborted)
+        toast.error(err.response?.data?.message || "Lỗi tạo thanh toán");
     } finally {
-      setLoading(false);
+      createRequest.current = null;
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 
   const handleCheckManually = async () => {
-    if (!sepayOrder) return;
+    const poller = pollRef.current;
+    if (!poller) return;
     setCheckingStatus(true);
-    try {
-      const res = await axiosClient.get(`/payment/sepay/status/${sepayOrder.orderId}`);
-      if (res.data.status === 'SUCCESS') {
-        clearInterval(pollRef.current);
-        toast.success('🎉 Thanh toán thành công! Tài khoản VIP đã được kích hoạt.');
-        setSepayOrder(null);
-        if (onVIPActivated) onVIPActivated();
-        setTimeout(() => window.location.reload(), 1500);
-      } else {
-        toast('Hệ thống đang kiểm tra giao dịch, vui lòng chờ trong giây lát...', { icon: '⏳' });
-      }
-    } catch {
-      toast.error('Lỗi khi kiểm tra trạng thái');
-    } finally {
-      setCheckingStatus(false);
-    }
+    await poller.check();
+    if (pollRef.current === poller) setCheckingStatus(false);
   };
-
-  const copyToClipboard = (text, type) => {
-    navigator.clipboard.writeText(text);
-    if (type === 'content') {
-      setCopiedContent(true);
-      setTimeout(() => setCopiedContent(false), 2000);
-    } else {
-      setCopiedAccount(true);
-      setTimeout(() => setCopiedAccount(false), 2000);
+  const copyToClipboard = async (text, type) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === "content") setCopiedContent(true);
+      else setCopiedAccount(true);
+      toast.success("Đã sao chép vào bộ nhớ tạm!");
+    } catch {
+      toast.error("Không thể sao chép. Vui lòng chọn và sao chép thủ công.");
     }
-    toast.success('Đã sao chép vào bộ nhớ tạm!');
   };
 
   // ── Màn hình QR SePay ─────────────────────────────────────────────────────
   if (sepayOrder) {
     return (
       <div className="max-w-md mx-auto py-6">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           className="rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-2xl p-6 sm:p-8 text-center space-y-6"
         >
+          {statusError && (
+            <p
+              role="status"
+              className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800"
+            >
+              {statusError}
+            </p>
+          )}
           {/* Header */}
           <div>
             <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mx-auto mb-3 shadow-xs">
               <QrCode className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-black text-slate-900">Quét mã QR thanh toán</h2>
+            <h2 className="text-xl font-black text-slate-900">
+              Quét mã QR thanh toán
+            </h2>
             <p className="text-xs text-slate-500 mt-1">
               Mở ứng dụng ngân hàng và quét mã để thanh toán tự động
             </p>
@@ -171,7 +210,9 @@ function VIPUpgrade({ onVIPActivated }) {
           <div className="rounded-2xl bg-slate-50/80 border border-slate-200/80 p-4 text-left text-xs space-y-2.5">
             <div className="flex justify-between items-center text-slate-500">
               <span>Ngân hàng thụ hưởng</span>
-              <span className="font-bold text-slate-800">{sepayOrder.bankCode}</span>
+              <span className="font-bold text-slate-800">
+                {sepayOrder.bankCode}
+              </span>
             </div>
 
             <div className="flex justify-between items-center text-slate-500">
@@ -179,18 +220,26 @@ function VIPUpgrade({ onVIPActivated }) {
               <div className="flex items-center gap-1.5 font-mono font-bold text-slate-900">
                 <span>{sepayOrder.accountNumber}</span>
                 <button
-                  onClick={() => copyToClipboard(sepayOrder.accountNumber, 'account')}
+                  onClick={() =>
+                    copyToClipboard(sepayOrder.accountNumber, "account")
+                  }
                   className="p-1 rounded text-slate-400 hover:text-indigo-600 bg-transparent border-0 cursor-pointer"
                   title="Sao chép số tài khoản"
                 >
-                  {copiedAccount ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedAccount ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
                 </button>
               </div>
             </div>
 
             <div className="flex justify-between items-center text-slate-500">
               <span>Chủ tài khoản</span>
-              <span className="font-bold text-slate-800">{sepayOrder.accountName}</span>
+              <span className="font-bold text-slate-800">
+                {sepayOrder.accountName}
+              </span>
             </div>
 
             <div className="flex justify-between items-center text-slate-500 pt-1 border-t border-slate-200/60">
@@ -202,19 +251,28 @@ function VIPUpgrade({ onVIPActivated }) {
 
             {/* Nội dung CK */}
             <div className="pt-2 border-t border-slate-200/60">
-              <span className="text-slate-500 block mb-1">Nội dung chuyển khoản chính xác:</span>
+              <span className="text-slate-500 block mb-1">
+                Nội dung chuyển khoản chính xác:
+              </span>
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-indigo-200 text-indigo-700 font-mono font-bold">
                 <span className="truncate">{sepayOrder.transferContent}</span>
                 <button
-                  onClick={() => copyToClipboard(sepayOrder.transferContent, 'content')}
+                  onClick={() =>
+                    copyToClipboard(sepayOrder.transferContent, "content")
+                  }
                   className="p-1 rounded text-indigo-500 hover:text-indigo-700 bg-transparent border-0 cursor-pointer shrink-0"
                   title="Sao chép nội dung"
                 >
-                  {copiedContent ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  {copiedContent ? (
+                    <Check className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
                 </button>
               </div>
               <p className="text-[10px] text-amber-600 font-medium mt-1">
-                * Vui lòng giữ nguyên nội dung chuyển khoản để hệ thống kích hoạt tự động.
+                * Vui lòng giữ nguyên nội dung chuyển khoản để hệ thống kích
+                hoạt tự động.
               </p>
             </div>
           </div>
@@ -240,7 +298,7 @@ function VIPUpgrade({ onVIPActivated }) {
             </button>
             <button
               onClick={() => {
-                clearInterval(pollRef.current);
+                pollRef.current?.stop();
                 setSepayOrder(null);
               }}
               className="px-4 py-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs transition-colors cursor-pointer"
@@ -251,222 +309,186 @@ function VIPUpgrade({ onVIPActivated }) {
 
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Hệ thống tự động đồng bộ mỗi 5 giây</span>
+            <span>Hệ thống tự động kiểm tra trạng thái thanh toán</span>
           </div>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
 
+  if (plansError)
+    return (
+      <ErrorState
+        error={plansError}
+        onRetry={retryPlans}
+        title="Không tải được các gói VIP"
+      />
+    );
+  if (plansLoading) return <LoadingState label="Đang tải các gói VIP…" />;
+  if (!plans.length)
+    return (
+      <EmptyState
+        title="Chưa có gói VIP khả dụng"
+        description="Bạn vẫn có thể khám phá tài liệu và quay lại sau."
+        to="/documents"
+        action="Khám phá tài liệu"
+      />
+    );
+
+  const chosen = plans.find((plan) => plan.key === selectedPlan);
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* ── HERO BANNER ── */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 sm:p-10 text-white relative overflow-hidden border border-slate-800 shadow-xl text-center">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 max-w-xl mx-auto space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-bold border border-white/10">
-            <Sparkles className="w-3.5 h-3.5" /> Nâng tầm trải nghiệm học tập
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
-            Nâng cấp tài khoản <span className="gradient-text-amber">VIP</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Mở khóa tải xuống không giới hạn, ưu tiên phản hồi nhanh từ cộng đồng và tính năng tóm tắt tài liệu với AI không giới hạn.
+    <div className="ds-columns ds-legacy-page">
+      <div className="min-w-0 space-y-6">
+        <Hero
+          title={
+            <>
+              Nâng cấp <span className="text-blue-600">tài khoản VIP</span>
+            </>
+          }
+          description="Khám phá gói thành viên DocShare, tải tài liệu và học tập hiệu quả hơn."
+          kind="vip"
+          compact
+        >
+          <p className="mt-4 text-xs text-[#60709b]">
+            Gói hiện tại:{" "}
+            <strong>{user?.plan === "VIP" ? "VIP" : "Miễn phí"}</strong>
+            {user?.plan_expires_at &&
+              ` · Hết hạn ${new Date(user.plan_expires_at).toLocaleDateString("vi-VN")}`}
           </p>
-        </div>
-      </div>
-
-      {/* ── CURRENT PLAN STATUS ── */}
-      {user && (
-        <div className="rounded-2xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm ${
-              user.plan === 'VIP' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {user.plan === 'VIP' ? <Crown className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500">Gói hiện tại:</span>
-                <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
-                  user.plan === 'VIP'
-                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                    : 'bg-slate-100 text-slate-700'
-                }`}>
-                  {user.plan === 'VIP' ? '💎 VIP MEMBER' : 'MIỄN PHÍ'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {user.plan === 'VIP' && user.plan_expires_at
-                  ? `Thời hạn đến: ${new Date(user.plan_expires_at).toLocaleDateString('vi-VN')}`
-                  : `Lượt tải tháng này: ${user.monthly_downloads || 0} / 10 lượt`}
-              </p>
-            </div>
-          </div>
-
-          {user.plan !== 'VIP' && (
-            <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-              ⚡ Nâng cấp để bỏ giới hạn 10 lượt tải
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── PRICING BENTO TIERS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {plans.map((plan) => {
-          const meta = PLAN_META[plan.key] || PLAN_META[1];
-          const Icon = meta.icon;
-          const isSelected = selectedPlan === plan.key;
-
-          return (
-            <motion.div
+        </Hero>
+        <h2 className="text-xl font-bold">Chọn gói VIP phù hợp với bạn</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {plans.map((plan) => (
+            <section
               key={plan.key}
-              whileHover={{ y: -4 }}
-              onClick={() => setSelectedPlan(plan.key)}
-              className={`relative rounded-3xl p-6 cursor-pointer transition-all duration-200 flex flex-col justify-between ${
-                isSelected
-                  ? 'bg-white shadow-xl ring-2 ring-indigo-600 border border-indigo-200'
-                  : 'bg-white/80 hover:bg-white border border-slate-200/80 shadow-sm'
-              }`}
+              className={`relative flex flex-col rounded-xl border p-5 ${selectedPlan === plan.key ? "border-blue-600 bg-blue-50/50 ring-1 ring-blue-600" : "border-blue-100 bg-white"}`}
             >
-              {meta.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-extrabold tracking-wider uppercase shadow-sm">
-                  {meta.badge}
-                </div>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                    isSelected ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  {!meta.popular && (
-                    <span className="text-[11px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
-                      {meta.badge}
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="font-extrabold text-slate-900 text-base">{plan.label}</h3>
-                <div className="mt-3 flex items-baseline gap-1">
-                  <span className="text-2xl sm:text-3xl font-black text-slate-900">
-                    {formatPrice(plan.amount)}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Chỉ khoảng {Math.round(plan.amount / plan.months).toLocaleString('vi-VN')}đ / tháng
-                </p>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold">
-                <span className={isSelected ? 'text-indigo-600' : 'text-slate-500'}>
-                  {isSelected ? 'Đang chọn gói này' : 'Bấm để chọn'}
+              {plan.key === 3 && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-blue-600 px-4 py-1 text-xs font-semibold text-white">
+                  Phổ biến nhất
                 </span>
-                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                  isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300'
-                }`}>
-                  {isSelected && <Check className="w-3.5 h-3.5" />}
-                </div>
+              )}
+              <div className="mt-2 flex items-center gap-3">
+                <span className="rounded-xl bg-blue-100/60 p-3 text-blue-600">
+                  <Clock size={23} />
+                </span>
+                <h3 className="font-bold">{plan.label}</h3>
               </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* ── PAYMENT PROVIDER SELECTOR ── */}
-      <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 shadow-sm space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-          Chọn phương thức thanh toán
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            {
-              id: 'SEPAY',
-              label: 'Chuyển khoản QR (SePay)',
-              desc: 'Kích hoạt sau khi xác nhận giao dịch',
-              icon: QrCode,
-              color: 'text-indigo-600',
-            },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isSelected = provider === item.id;
-            return (
-              <div
-                key={item.id}
-                onClick={() => setProvider(item.id)}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center gap-3.5 ${
-                  isSelected
-                    ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600'
-                    : 'border-slate-200/80 bg-white hover:bg-slate-50'
-                }`}
+              <p className="mt-6 text-2xl font-extrabold tracking-tight">
+                {formatPrice(plan.amount)}
+              </p>
+              <p className="mt-2 text-xs text-[#7181a8]">
+                Khoảng{" "}
+                {Math.round(plan.amount / plan.months).toLocaleString("vi-VN")}đ
+                / tháng
+              </p>
+              <ul className="my-7 space-y-4 text-xs text-[#60709b]">
+                {[
+                  "Tải tài liệu không giới hạn",
+                  "Huy hiệu thành viên VIP",
+                  "Thời hạn theo gói đã chọn",
+                ].map((text) => (
+                  <li key={text} className="flex items-center gap-2">
+                    <CheckCircle2
+                      size={17}
+                      className="shrink-0 text-emerald-500"
+                    />
+                    {text}
+                  </li>
+                ))}
+              </ul>
+              <button
+                className={`${selectedPlan === plan.key ? "ds-button-primary" : "ds-button-outline"} mt-auto w-full text-xs`}
+                aria-pressed={selectedPlan === plan.key}
+                onClick={() => setSelectedPlan(plan.key)}
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
-                }`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-slate-900 truncate">{item.label}</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 truncate">{item.desc}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── VIP PERKS CHECKLIST ── */}
-      <div className="rounded-3xl bg-gradient-to-br from-indigo-50/60 to-purple-50/50 border border-indigo-100/80 p-6 space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-indigo-600" /> Đặc quyền độc quyền cho tài khoản VIP
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700">
-          {[
-            'Tải xuống tài liệu tốc độ cao không giới hạn',
-            'Không giới hạn câu hỏi tương tác với trợ lý AI',
-            'Huy hiệu PRO VIP phát sáng trên hồ sơ và bài đăng',
-            'Ưu tiên duyệt tài liệu đăng tải nhanh hơn',
-          ].map((perk, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>{perk}</span>
-            </div>
+                {selectedPlan === plan.key
+                  ? "Đang chọn gói này"
+                  : "Chọn gói này"}
+              </button>
+            </section>
           ))}
         </div>
-      </div>
-
-      {/* ── SUBMIT / PAY BUTTON ── */}
-      <motion.button
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={handlePayment}
-        disabled={loading || !selectedPlan}
-        className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 shadow-xl shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 border-0 cursor-pointer"
-      >
-        {loading ? (
-          <>
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            <span>Đang tạo cổng thanh toán...</span>
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-4 h-4" />
-            <span>
-              {provider === 'SEPAY'
-                ? 'Tạo mã QR chuyển khoản tự động'
-                : `Thanh toán qua ${provider}`}
-            </span>
-          </>
+        {!plans.length && (
+          <p className="text-sm text-[#7181a8]">
+            Chưa tải được danh sách gói. Vui lòng tải lại trang.
+          </p>
         )}
-      </motion.button>
+        <Panel title="Phương thức thanh toán">
+          <div className="flex items-center gap-4 rounded-xl border border-blue-500 bg-blue-50/50 p-5">
+            <QrCode className="text-blue-600" size={35} />
+            <div>
+              <h3 className="text-sm font-bold">QR chuyển khoản (SePay)</h3>
+              <p className="mt-1 text-xs text-[#7181a8]">
+                Quét mã QR từ ứng dụng ngân hàng. Kích hoạt sau khi xác nhận
+                giao dịch.
+              </p>
+            </div>
+            <CheckCircle2 className="ml-auto shrink-0 text-blue-600" />
+          </div>
+        </Panel>
+      </div>
+      <aside className="space-y-4">
+        <Panel title="Thông tin đơn hàng">
+          <div className="rounded-xl border border-blue-100 p-4">
+            <div className="flex items-center gap-3">
+              <Crown className="text-amber-500" size={32} />
+              <div>
+                <h3 className="text-sm font-bold">Gói DocShare VIP</h3>
+                <p className="mt-1 text-xs text-[#7181a8]">
+                  {chosen?.label || "Chọn gói thành viên"}
+                </p>
+              </div>
+            </div>
+            <div className="my-6 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-5">
+              <span className="text-sm font-bold">Tổng thanh toán</span>
+              <strong className="text-2xl text-blue-600">
+                {chosen ? formatPrice(chosen.amount) : "—"}
+              </strong>
+            </div>
+            <button
+              disabled={loading || !chosen}
+              onClick={handlePayment}
+              className="ds-button-primary w-full text-sm"
+            >
+              {loading ? "Đang tạo mã QR…" : "Tiếp tục thanh toán"}
+              <ArrowRight size={18} />
+            </button>
+            <p className="mt-4 text-center text-xs text-[#7181a8]">
+              Kiểm tra thông tin trước khi chuyển khoản.
+            </p>
+          </div>
+        </Panel>
+        <Panel title="Bạn sẽ nhận được">
+          <div className="space-y-5">
+            {[
+              [
+                "Tải tài liệu không giới hạn",
+                "Mở rộng quyền tải xuống trong thời hạn VIP.",
+              ],
+              [
+                "Quản lý tài khoản dễ dàng",
+                "Theo dõi gói và thời hạn ngay trong hồ sơ.",
+              ],
+              [
+                "Xác nhận thanh toán tự động",
+                "Gói được kích hoạt khi hệ thống xác nhận giao dịch.",
+              ],
+            ].map(([title, desc]) => (
+              <div key={title} className="flex gap-3">
+                <CheckCircle2 className="shrink-0 text-emerald-500" size={23} />
+                <div>
+                  <h3 className="text-sm font-semibold">{title}</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-[#7181a8]">
+                    {desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </aside>
     </div>
   );
 }
-
 export default VIPUpgrade;

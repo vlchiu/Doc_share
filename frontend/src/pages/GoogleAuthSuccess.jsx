@@ -26,7 +26,7 @@ function GoogleAuthSuccess() {
     if (userId) localStorage.setItem('userId', userId);
     toast.success('Đăng nhập Google thành công!');
     window.location.href = '/'; // reload để App.jsx fetch lại user
-  }, []);
+  }, [navigate]);
 
   return (
     <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>

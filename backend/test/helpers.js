@@ -22,7 +22,7 @@ function loader(mocks = {}, env = {}) {
     };
     const context = { require: customRequire, module, exports: module.exports, __dirname: path.dirname(filename),
       process: { env: { JWT_SECRET: 'local-test-only', ...env } }, Buffer, URL, console: { log() {}, warn() {}, error() {} },
-      setTimeout, clearTimeout };
+      setTimeout, clearTimeout, AbortController };
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename });
     return module.exports;
   }

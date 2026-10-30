@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import useRemoteData from "../hooks/useRemoteData";
+import { LoadingState, ErrorState } from "../components/docshare/ResourceState";
+import { Link } from "react-router-dom";
+import { Panel, VipPromo } from "../components/docshare/Primitives";
+import FormField from "../components/docshare/FormField";
+import { useState, useEffect } from "react";
 import {
   User,
   Camera,
@@ -11,10 +15,10 @@ import {
   Sparkles,
   Shield,
   Save,
-  Lock
-} from 'lucide-react';
-import toast from 'react-hot-toast';
-import axiosClient from '../api/axiosClient';
+  Lock,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import axiosClient from "../api/axiosClient";
 import {
   BarChart,
   Bar,
@@ -23,55 +27,54 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-} from 'recharts';
+} from "recharts";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 function Profile() {
-  const [user, setUser] = useState(null);
-  const [newName, setNewName] = useState('');
+  const {
+    data: user,
+    loading: userLoading,
+    error: userError,
+    retry: retryUser,
+  } = useRemoteData("/auth/me");
+  const {
+    data: ownDocs = [],
+    loading: statsLoading,
+    error: statsError,
+    retry: retryStats,
+  } = useRemoteData("/documents/mine");
+  const [newName, setNewName] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [docStats, setDocStats] = useState({ total: 0, approved: 0, pending: 0 });
-  const [topDocs, setTopDocs] = useState([]);
+  const approved = ownDocs.filter((doc) => doc.status === "APPROVED");
+  const docStats = {
+    total: ownDocs.length,
+    approved: approved.length,
+    pending: ownDocs.filter((doc) => doc.status === "PENDING").length,
+  };
+  const topDocs = [...approved]
+    .sort((a, b) => b.download_count - a.download_count)
+    .slice(0, 5)
+    .map((doc) => ({
+      name: doc.title.length > 18 ? doc.title.slice(0, 18) + "…" : doc.title,
+      tải: doc.download_count,
+      xem: doc.view_count,
+    }));
 
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pwMsg, setPwMsg] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
 
-  const getMe = async () => {
-    const res = await axiosClient.get('/auth/me');
-    setUser(res.data);
-    setNewName(res.data.name);
-  };
-
-  const getStats = async () => {
-    try {
-      const res = await axiosClient.get('/documents/mine');
-      const docs = Array.isArray(res.data) ? res.data : [];
-      const approved = docs.filter((d) => d.status === 'APPROVED');
-      const pending = docs.filter((d) => d.status === 'PENDING').length;
-      setDocStats({ total: docs.length, approved: approved.length, pending });
-      const sorted = [...approved]
-        .sort((a, b) => b.download_count - a.download_count)
-        .slice(0, 5);
-      setTopDocs(
-        sorted.map((d) => ({
-          name: d.title.length > 18 ? d.title.slice(0, 18) + '…' : d.title,
-          tải: d.download_count,
-          xem: d.view_count,
-        }))
-      );
-    } catch {}
-  };
-
-  useEffect(() => {
-    getMe();
-    getStats();
-  }, []);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
 
   const onFileChange = (e) => {
     const file = e.target.files[0];
@@ -84,14 +87,16 @@ function Profile() {
     e.preventDefault();
     setUpdating(true);
     const formData = new FormData();
-    formData.append('name', newName);
-    if (selectedFile) formData.append('avatar', selectedFile);
+    formData.append("name", newName ?? user.name);
+    if (selectedFile) formData.append("avatar", selectedFile);
     try {
-      await axiosClient.put('/auth/update-profile', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success('Cập nhật thông tin thành công!');
+      await axiosClient.put("/auth/update-profile", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      toast.success("Cập nhật thông tin thành công!");
       window.location.reload();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi cập nhật!');
+      toast.error(error.response?.data?.message || "Lỗi cập nhật!");
     } finally {
       setUpdating(false);
     }
@@ -101,281 +106,272 @@ function Profile() {
     e.preventDefault();
     setPwMsg(null);
     if (newPassword !== confirmPassword) {
-      setPwMsg({ type: 'error', text: 'Mật khẩu xác nhận không khớp!' });
+      setPwMsg({ type: "error", text: "Mật khẩu xác nhận không khớp!" });
       return;
     }
     setChangingPw(true);
     try {
-      await axiosClient.put('/auth/change-password', { currentPassword, newPassword });
-      setPwMsg({ type: 'success', text: 'Đổi mật khẩu thành công!' });
-      toast.success('Đổi mật khẩu thành công!');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      await axiosClient.put("/auth/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      setPwMsg({ type: "success", text: "Đổi mật khẩu thành công!" });
+      toast.success("Đổi mật khẩu thành công!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error) {
       setPwMsg({
-        type: 'error',
-        text: error.response?.data?.message || 'Lỗi khi đổi mật khẩu!',
+        type: "error",
+        text: error.response?.data?.message || "Lỗi khi đổi mật khẩu!",
       });
-      toast.error(error.response?.data?.message || 'Lỗi khi đổi mật khẩu!');
+      toast.error(error.response?.data?.message || "Lỗi khi đổi mật khẩu!");
     } finally {
       setChangingPw(false);
     }
   };
 
-  if (!user) {
+  if (userError)
     return (
-      <div className="py-20 text-center text-slate-400 text-xs">
-        Đang tải thông tin tài khoản...
-      </div>
+      <ErrorState
+        error={userError}
+        onRetry={retryUser}
+        title="Không tải được hồ sơ"
+      />
     );
-  }
+  if (userLoading || !user) return <LoadingState label="Đang tải hồ sơ…" />;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* ── HEADER BENTO ── */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white relative overflow-hidden border border-slate-800 shadow-xl flex items-center justify-between">
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-indigo-300 text-xs font-bold mb-3 border border-white/10">
-            <User className="w-3.5 h-3.5" /> Hồ sơ cá nhân
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Thiết lập tài khoản</h1>
-          <p className="text-xs sm:text-sm text-slate-300 mt-1">
-            Quản lý định danh, bảo mật và theo dõi thống kê hiệu suất tài liệu của bạn.
-          </p>
-        </div>
-      </div>
-
-      {/* ── PROFILE INFO CARD ── */}
-      <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 sm:p-8 shadow-sm">
-        <form onSubmit={handleUpdate} className="space-y-6">
-          {/* Avatar Upload */}
-          <div className="flex flex-col items-center gap-2">
-            <div className="relative group">
-              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-xl ring-2 ring-indigo-500/30">
-                <img
-                  src={
-                    preview ||
-                    (user.avatar_url
-                      ? user.avatar_url.startsWith('http')
+    <div className="ds-columns ds-legacy-page">
+      <div className="min-w-0 space-y-5">
+        <section className="ds-profile-hero">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="relative">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-blue-100 text-3xl font-bold text-blue-600">
+                {preview || user.avatar_url ? (
+                  <img
+                    src={
+                      preview ||
+                      (user.avatar_url.startsWith("http")
                         ? user.avatar_url
-                        : `${API_URL}${user.avatar_url}`
-                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`)
-                  }
-                  alt="avatar"
-                  className="w-full h-full object-cover"
-                />
+                        : `${API_URL}${user.avatar_url}`)
+                    }
+                    alt="Ảnh đại diện"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  user.name?.[0]
+                )}
               </div>
               <label
                 htmlFor="avatar-input"
-                className="absolute bottom-0 right-0 p-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 shadow-md cursor-pointer transition-transform hover:scale-110"
-                title="Thay đổi ảnh đại diện"
+                className="absolute bottom-0 right-0 cursor-pointer rounded-full border-4 border-white bg-blue-600 p-2 text-white"
               >
-                <Camera className="w-4 h-4" />
+                <Camera size={17} />
+                <span className="sr-only">Thay đổi ảnh đại diện</span>
               </label>
               <input
                 id="avatar-input"
                 type="file"
-                hidden
-                onChange={onFileChange}
                 accept="image/*"
+                className="sr-only"
+                onChange={onFileChange}
               />
             </div>
-            <p className="text-[11px] text-slate-400">Bấm biểu tượng máy ảnh để tải ảnh mới</p>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-extrabold">
+                {user.name}{" "}
+                {user.plan === "VIP" && (
+                  <span className="rounded-lg bg-amber-100 px-3 py-1 align-middle text-xs text-amber-600">
+                    VIP
+                  </span>
+                )}
+              </h1>
+              <p className="mt-2 break-all text-sm text-[#60709b]">
+                {user.email}
+              </p>
+              <p className="mt-3 flex items-center gap-2 text-xs text-[#7181a8]">
+                <Calendar size={16} />
+                Thành viên từ{" "}
+                {new Date(user.created_at).toLocaleDateString("vi-VN")}
+              </p>
+            </div>
           </div>
-
-          {/* Form fields */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Địa chỉ Email
-              </label>
-              <input
-                type="text"
+          <p className="mt-5 text-sm text-[#60709b]">
+            Quản lý hồ sơ và chia sẻ tri thức cùng cộng đồng DocShare.
+          </p>
+        </section>
+        <nav
+          className="flex flex-wrap gap-3 border-b border-blue-100 pb-3 text-sm"
+          aria-label="Các mục hồ sơ"
+        >
+          <a
+            href="#personal-info"
+            className="rounded-lg bg-blue-50 px-4 py-2 font-semibold text-blue-600"
+          >
+            Thông tin cá nhân
+          </a>
+          <Link to="/saved-documents" className="px-3 py-2">
+            Tài liệu đã lưu
+          </Link>
+          <Link to="/download-history" className="px-3 py-2">
+            Lịch sử tải xuống
+          </Link>
+          <a href="#password-settings" className="px-3 py-2">
+            Bảo mật
+          </a>
+        </nav>
+        <Panel title="Thông tin cá nhân">
+          <form
+            id="personal-info"
+            onSubmit={handleUpdate}
+            className="space-y-5"
+          >
+            <p className="text-sm text-[#7181a8]">
+              Cập nhật thông tin để hoàn thiện hồ sơ của bạn.
+            </p>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <FormField
+                label="Họ và tên"
+                id="profile-name"
+                required
+                value={newName ?? user.name}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+              <FormField
+                label="Email"
+                id="profile-email"
                 value={user.email}
                 disabled
-                className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-slate-100/80 text-slate-500 cursor-not-allowed font-medium"
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Tên hiển thị
-              </label>
-              <input
-                type="text"
-                required
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-semibold"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-500 pt-1">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <span>
-                Thành viên từ ngày:{' '}
-                <strong className="text-slate-700">
-                  {new Date(user.created_at).toLocaleDateString('vi-VN')}
-                </strong>
-              </span>
-            </div>
-          </div>
-
-          {/* METRIC PILLS */}
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            {[
-              {
-                label: 'Tổng tài liệu',
-                value: docStats.total,
-                bg: 'bg-indigo-50/70 border-indigo-100',
-                text: 'text-indigo-600',
-              },
-              {
-                label: 'Đã phê duyệt',
-                value: docStats.approved,
-                bg: 'bg-emerald-50/70 border-emerald-100',
-                text: 'text-emerald-600',
-              },
-              {
-                label: 'Đang chờ duyệt',
-                value: docStats.pending,
-                bg: 'bg-amber-50/70 border-amber-100',
-                text: 'text-amber-600',
-              },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className={`p-3.5 rounded-2xl border ${s.bg} text-center flex flex-col justify-center`}
-              >
-                <div className={`text-xl font-black ${s.text}`}>{s.value}</div>
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
-                  {s.label}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="submit"
-            disabled={updating}
-            className="w-full py-3 rounded-2xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 border-0 cursor-pointer"
+            {selectedFile && (
+              <p className="text-xs text-blue-600">
+                Ảnh mới sẽ được lưu cùng thay đổi hồ sơ.
+              </p>
+            )}
+            <button disabled={updating} className="ds-button-primary text-sm">
+              <Save size={17} />
+              {updating ? "Đang lưu…" : "Lưu thay đổi"}
+            </button>
+          </form>
+        </Panel>
+        <Panel title="Bảo mật tài khoản">
+          <form
+            id="password-settings"
+            onSubmit={handleChangePassword}
+            className="space-y-4"
           >
-            <Save className="w-4 h-4" />
-            <span>{updating ? 'Đang lưu...' : 'Lưu thay đổi hồ sơ'}</span>
-          </button>
-        </form>
-      </div>
-
-      {/* ── TOP DOCS ANALYTICS (IF ANY) ── */}
-      {topDocs.length > 0 && (
-        <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 sm:p-8 shadow-sm space-y-4">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-              Top tài liệu thịnh hành của bạn
-            </h3>
-          </div>
-          <div className="h-56 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topDocs} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '11px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                  }}
-                />
-                <Bar dataKey="tải" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="xem" fill="#10b981" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* ── PASSWORD CHANGE CARD ── */}
-      <div className="rounded-3xl bg-white/85 backdrop-blur-md border border-slate-200/80 p-6 sm:p-8 shadow-sm space-y-5">
-        <div className="flex items-center gap-2">
-          <Lock className="w-4 h-4 text-indigo-600" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-            Đổi mật khẩu tài khoản
-          </h3>
-        </div>
-
-        <form onSubmit={handleChangePassword} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-              Mật khẩu hiện tại
-            </label>
-            <input
+            <FormField
+              label="Mật khẩu hiện tại"
+              id="current-password"
               type="password"
+              autoComplete="current-password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-medium"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-              Mật khẩu mới
-            </label>
-            <input
-              type="password"
-              required
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-medium"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-              Xác nhận mật khẩu mới
-            </label>
-            <input
-              type="password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100/70 outline-none transition-all font-medium"
-            />
-          </div>
-
-          {pwMsg && (
-            <div
-              className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
-                pwMsg.type === 'error'
-                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              }`}
-            >
-              {pwMsg.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-              )}
-              <span>{pwMsg.text}</span>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                label="Mật khẩu mới"
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={6}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <FormField
+                label="Xác nhận mật khẩu mới"
+                id="confirm-password"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={changingPw}
-            className="w-full py-3 rounded-2xl font-bold text-xs text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 border-0 cursor-pointer"
-          >
-            <KeyRound className="w-4 h-4" />
-            <span>{changingPw ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}</span>
-          </button>
-        </form>
+            {pwMsg && (
+              <p
+                role="status"
+                className={
+                  pwMsg.type === "error"
+                    ? "text-sm text-rose-600"
+                    : "text-sm text-emerald-600"
+                }
+              >
+                {pwMsg.text}
+              </p>
+            )}
+            <button className="ds-button-primary text-sm" disabled={changingPw}>
+              <Lock size={17} />
+              {changingPw ? "Đang cập nhật…" : "Đổi mật khẩu"}
+            </button>
+          </form>
+        </Panel>
+        {topDocs.length > 0 && (
+          <Panel title="Thống kê tài liệu của bạn">
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topDocs}>
+                  <CartesianGrid stroke="#edf2fc" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="tải" fill="#1761ff" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="xem" fill="#80bdff" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+        )}
       </div>
+      <aside className="space-y-4">
+        <Panel title="Tài khoản của bạn">
+          <div className="rounded-xl bg-amber-50 p-4">
+            <h3 className="font-bold">
+              {user.plan === "VIP" ? "DocShare VIP" : "DocShare miễn phí"}
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-[#7181a8]">
+              {user.plan === "VIP" && user.plan_expires_at
+                ? `Thời hạn đến ${new Date(user.plan_expires_at).toLocaleDateString("vi-VN")}`
+                : "Khám phá và chia sẻ tài liệu cùng cộng đồng."}
+            </p>
+            <Link to="/vip" className="ds-button-outline mt-4 w-full text-xs">
+              Quản lý gói VIP →
+            </Link>
+          </div>
+        </Panel>
+        <Panel title="Thống kê tài khoản">
+          {statsError ? (
+            <ErrorState error={statsError} onRetry={retryStats} />
+          ) : statsLoading ? (
+            <LoadingState label="Đang tải thống kê…" />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["Tài liệu tải lên", docStats.total],
+                  ["Đã phê duyệt", docStats.approved],
+                  ["Đang chờ duyệt", docStats.pending],
+                  ["Lượt tải tháng này", user.monthly_downloads || 0],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-lg border border-blue-100 p-3"
+                  >
+                    <strong className="text-xl">{value}</strong>
+                    <p className="mt-1 text-xs text-[#7181a8]">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </Panel>
+        <VipPromo />
+      </aside>
     </div>
   );
 }
-
 export default Profile;

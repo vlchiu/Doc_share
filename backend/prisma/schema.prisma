@@ -36,6 +36,7 @@ model User {
   payments             Payment[]
   ratings              Rating[]
   reports              Report[]
+  conversations        Conversation[]
   saved_docs           SavedDocument[]
 }
 
@@ -71,6 +72,7 @@ model Document {
   download_history DownloadHistory[]
   ratings          Rating[]
   reports          Report[]
+  conversations    Conversation[]
   saved_by         SavedDocument[]
 }
 
@@ -186,4 +188,32 @@ enum Status {
   PENDING
   APPROVED
   REJECTED
+}
+
+
+model Conversation {
+  id          String @id @default(uuid())
+  user_id     Int
+  document_id Int?
+  title       String @db.VarChar(120)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  busy_token  String?
+  busy_until  DateTime?
+  user        User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  document    Document? @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  messages    ChatMessage[]
+  @@index([user_id, updated_at, id])
+}
+
+model ChatMessage {
+  id              Int @id @default(autoincrement())
+  conversation_id String
+  request_id      String
+  role            String @db.VarChar(16)
+  content         String
+  created_at      DateTime @default(now())
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  @@unique([conversation_id, request_id, role])
+  @@index([conversation_id, id])
 }

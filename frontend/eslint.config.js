@@ -26,4 +26,8 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: ['src/components/ui/button.jsx', 'src/components/ui/badge.jsx'],
+    rules: {'react-refresh/only-export-components': ['error', {allowExportNames:['buttonVariants','badgeVariants']}]},
+  },
 ])

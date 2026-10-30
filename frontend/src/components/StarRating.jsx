@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Star } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 
 function StarRating({ avgScore, totalRatings, userScore, onRate, readonly = false }) {
   const [hovered, setHovered] = useState(0);
@@ -14,7 +14,7 @@ function StarRating({ avgScore, totalRatings, userScore, onRate, readonly = fals
         {[1, 2, 3, 4, 5].map((star) => {
           const isFilled = star <= (readonly ? Math.round(avgScore || 0) : display);
           return (
-            <motion.button
+            <Motion.button
               key={star}
               type="button"
               disabled={readonly}
@@ -35,7 +35,7 @@ function StarRating({ avgScore, totalRatings, userScore, onRate, readonly = fals
                     : 'fill-slate-100 text-slate-300'
                 }`}
               />
-            </motion.button>
+            </Motion.button>
           );
         })}
       </div>

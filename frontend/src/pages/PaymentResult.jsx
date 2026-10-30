@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Home } from 'lucide-react';
 
 function PaymentResult({ onPaymentSuccess }) {
@@ -23,7 +23,7 @@ function PaymentResult({ onPaymentSuccess }) {
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center py-12 px-4 text-center">
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="max-w-md w-full rounded-3xl bg-white/85 backdrop-blur-xl border border-slate-200/80 p-8 sm:p-10 shadow-2xl space-y-6"
@@ -72,7 +72,7 @@ function PaymentResult({ onPaymentSuccess }) {
             </Link>
           )}
         </div>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

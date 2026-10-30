@@ -63,6 +63,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/follow', followRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/web-search', require('./routes/webSearchRoutes'));
 
 require('./jobs/cleanupRegistrations').startRegistrationCleanup();
 
