@@ -126,3 +126,13 @@ Kiểm chứng: backend76/76; frontend lint sạch/build đạt; browser covers-
 Playwright là devDependency frontend (lockfile cập nhật); browser mặc định dùng Chromium Playwright, CHROME_PATH tùy chọn, ảnh test dùng thư mục tạm hệ điều hành. Runner test build API giả lập, mở preview cổng 4174, chạy sáu suite tuần tự và đóng preview. Đã thêm GitHub Actions Node22; chưa chạy trên GitHub/Windows. Hướng dẫn LOCAL_TESTING.md.
 
 Kiểm chứng local: CHROME_PATH=/usr/bin/google-chrome npm run test:all đạt exit0, backend76/76, poller3/3, lint/build, sáu suite trình duyệt. Prisma generate từ gốc đạt. Không chạy dev với database live, không gọi provider/email/thanh toán thật. Test bị sandbox chặn HTTP lúc đầu, chạy lại ngoài sandbox thành công. npm install báo 35 cảnh báo dependency (2 low,14 moderate,18 high,1 critical); chưa audit phân loại production/dev hay tự nâng version phá vỡ tương thích. Cần rà riêng. Chưa commit/deploy.
+
+## Bổ sung kiểm thử thanh toán tự động
+
+Thêm backend/test/sepay-payment.test.js với 8 ca nghiệp vụ SePay (giá server/QR, gói/cấu hình lỗi, giao dịch cá nhân, thanh toán và gửi lại không cộng VIP/email trùng, code mâu thuẫn, thiếu/thừa tiền, user bị khóa, quyền polling). Không sửa logic thanh toán. Full backend npm test đạt84/84 ngoài sandbox; không gọi dịch vụ thật, không chạy lại browser vì chỉ thêm test backend. LOCAL_TESTING.md có lệnh chạy riêng và giới hạn mock. Các test mới tự tích hợp test:all/CI hiện có.
+
+## Kiểm thử vận hành theo sáu nhóm
+
+Thêm test:database (PostgreSQL tạm Unix socket, migrations + integration concurrency + pg_dump/restore so sánh14 bảng/chat/sequence), test:security (npm audit production/all hai app + tracked dump/env), test:staging (explicit staging URL/two tokens/private doc fixture, GET quyền/lists/history/timings). Không dùng DB live hoặc gửi email/thanh toán.
+
+Đã chạy test:database PASS PostgreSQL14, cluster tự dọn. test:security FAIL có high/critical cả production/dev và tracked backup.sql, frontend/.env, frontend/.env.production. Không in nội dung bí mật, không sửa dependency/delete Git. test:staging mới syntax checked, chưa chạy live do thiếu staging fixture. LOCAL_TESTING.md phân biệt rõ nhóm còn thiếu: order expiry/late transfer, AI/storage quota, live upload/AI/OTP, backup schedule/cloud assets, load. Không tuyên bố sáu nhóm đều đạt. Các script mới được gọi riêng, không nối vào CI/test:all mặc định.

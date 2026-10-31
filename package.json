@@ -7,6 +7,9 @@
     "test": "node scripts/workspace.cjs test",
     "test:browser": "node scripts/workspace.cjs browser",
     "test:all": "node scripts/workspace.cjs all",
-    "browser:install": "npm --prefix frontend exec playwright install chromium"
+    "browser:install": "npm --prefix frontend exec playwright install chromium",
+    "test:database": "node scripts/test-database.cjs",
+    "test:security": "node scripts/test-security.cjs",
+    "test:staging": "node scripts/test-live.cjs"
   }
 }
