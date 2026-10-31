@@ -15,7 +15,9 @@ function publicDocument(doc) {
   if (!doc) return null;
   const { file_url, thumbnail_url, ...data } = doc;
   // Original files are delivered exclusively by the authenticated file endpoint.
-  return { ...data, thumbnail_url: null };
+  // Only our normalized, separate cover assets can be exposed through the proxy.
+  const { coverAsset } = require('./documentCover');
+  return { ...data, thumbnail_url: coverAsset(thumbnail_url) ? `/api/documents/thumbnail/${doc.id}?v=${doc.content_version}` : null };
 }
 
 function documentAccess({ manage = false, includeDeleted = false, param = 'id' } = {}) {

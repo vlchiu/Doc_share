@@ -29,7 +29,7 @@ export const guides = [
     steps: [
       "Chuẩn bị tệp bạn có quyền chia sẻ. Tệp được hỗ trợ và dung lượng tối đa 20 MB được hiển thị ở trang tải lên.",
       "Chọn tệp, nhập tiêu đề, mô tả, loại tài liệu và danh mục. Kiểm tra thông tin rồi gửi.",
-      "Theo dõi trạng thái trong Tài liệu của tôi. Tài liệu cần được duyệt trước khi công khai; thay đổi nội dung có thể cần duyệt lại.",
+      "Theo dõi trạng thái trong Tài liệu của tôi. Mở chi tiết tài liệu → Quản lý ảnh bìa tài liệu để chọn JPG, PNG hoặc WebP tối đa 5 MB. Thay ảnh bìa hoặc nội dung cần được duyệt lại.",
     ],
   },
   {

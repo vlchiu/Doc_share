@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const chat = require("./chat-fixture.cjs")();
 (async () => {
   const browser = await chromium.launch({
-    executablePath: "/usr/bin/google-chrome",
+    executablePath: process.env.CHROME_PATH || undefined,
     headless: true,
     args: ["--no-sandbox"],
   });
@@ -61,6 +61,11 @@ const chat = require("./chat-fixture.cjs")();
     await page
       .getByText("Khôi phục phản hồi bị mất", { exact: true })
       .waitFor();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('input[aria-label="Nhập câu hỏi cho AI"]')
+          ?.value === "",
+    );
     assert.equal([...chat.conversations.values()][0].messages.length, 4);
     chat.failOnce();
     await page.getByLabel("Nhập câu hỏi cho AI").fill("Câu hỏi tiếp theo");
@@ -79,6 +84,11 @@ const chat = require("./chat-fixture.cjs")();
       .getByRole("button", { name: "Gửi câu hỏi", exact: true })
       .click();
     await page.getByText("Câu hỏi tiếp theo", { exact: true }).waitFor();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('input[aria-label="Nhập câu hỏi cho AI"]')
+          ?.value === "",
+    );
     assert.equal([...chat.conversations.values()][0].messages.length, 6);
     await page
       .getByRole("button", { name: "Hội thoại mới", exact: true })
@@ -137,6 +147,10 @@ const chat = require("./chat-fixture.cjs")();
       .waitFor();
     for (const width of [1440, 768, 375]) {
       await page.setViewportSize({ width, height: 900 });
+      if (width === 375)
+        await page
+          .getByRole("button", { name: "Lịch sử hội thoại", exact: true })
+          .click();
       await page
         .getByRole("link", { name: /Hội thoại thứ hai/ })
         .waitFor({ state: "visible" });
@@ -148,7 +162,7 @@ const chat = require("./chat-fixture.cjs")();
       );
     }
     await page.screenshot({
-      path: "/tmp/docshare-chat-history.png",
+      path: require("node:path").join(require("node:os").tmpdir(), "docshare-chat-history.png"),
       fullPage: true,
     });
     assert.deepEqual(errors, []);

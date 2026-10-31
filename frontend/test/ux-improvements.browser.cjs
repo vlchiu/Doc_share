@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 
 (async () => {
   const browser = await chromium.launch({
-    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+    executablePath: process.env.CHROME_PATH || undefined,
     headless: true,
     args: ["--no-sandbox"],
   });

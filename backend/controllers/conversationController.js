@@ -40,8 +40,10 @@ async function generate(req, conversation, message, history) {
 }
 exports.list = endpoint(async (req, res) => {
   const page = positive(req.query.page, 1);
+  const search = req.query.search ?? '';
+  if(typeof search !== 'string' || search.length > 120) throw fail(400, 'Từ khóa tìm kiếm tối đa 120 ký tự.');
   if (page > 10000) throw fail(400, 'Trang vượt giới hạn.');
-  const rows = await prisma.conversation.findMany({ where: { user_id: req.user.userId }, select: fields,
+  const rows = await prisma.conversation.findMany({ where: { user_id: req.user.userId, ...(search.trim() ? {title:{contains:search.trim(),mode:"insensitive"}} : {}) }, select: fields,
     orderBy: [{ updated_at: 'desc' }, { id: 'desc' }], skip: (page - 1) * 30, take: 31 });
   res.json({ conversations: rows.slice(0, 30), hasMore: rows.length > 30 });
 });

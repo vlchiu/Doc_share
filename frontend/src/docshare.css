@@ -745,3 +745,14 @@
 .ds-skip-link { position: fixed; top: 8px; left: 16px; z-index: 100; transform: translateY(-160%); background: white; color: #155dff; border-radius: 8px; padding: 12px; }
 .ds-skip-link:focus { transform: translateY(0); }
 :where(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+
+.ds-mobile-disclosure { display: none; }
+@media (max-width: 767px) {
+  .ds-mobile-disclosure { display: flex; }
+  .ds-chat-collapsible { display: none; }
+  .ds-chat-collapsible.is-open { display: block; }
+  .ds-chat-messages { height: 48dvh; min-height: 240px; }
+}
+/* Keep the keyboard skip link visually clipped even in scrolled full-page layouts. */
+.ds-skip-link { clip-path: inset(50%); }
+.ds-skip-link:focus { clip-path: none; }

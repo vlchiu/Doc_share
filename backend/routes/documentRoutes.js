@@ -14,6 +14,16 @@ const { reportDocument } = require('../controllers/reportController');
 const { documentAccess } = require('../utils/documentAccess');
 const { serveDocumentFile, downloadDocumentFile } = require('../controllers/fileController');
 const router = express.Router();
+const cover = require('../controllers/coverController');
+const { rateLimit } = require('express-rate-limit');
+const multer = require('multer');
+const coverUpload = multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1,fields:0}});
+const coverLimit = rateLimit({windowMs:60000,limit:15,standardHeaders:'draft-7',legacyHeaders:false});
+const coverReadLimit = rateLimit({windowMs:60000,limit:240,standardHeaders:'draft-7',legacyHeaders:false});
+router.get('/thumbnail/:id', coverReadLimit, optionalAuth, documentAccess(), cover.read);
+router.post('/:id/cover', verifyToken, coverLimit, documentAccess({manage:true}), coverUpload.single('cover'), cover.update);
+router.delete('/:id/cover', verifyToken, documentAccess({manage:true}), cover.remove);
+router.use('/:id/cover', (error,req,res,next)=> {if(!error)return next();return res.status(400).json({message:'Ảnh bìa tối đa 5 MB, chỉ chọn một ảnh.'});});
 
 // --- STATIC ROUTES (phải đặt TRƯỚC dynamic /:id) ---
 router.get('/pending', verifyToken, getPendingDocuments);

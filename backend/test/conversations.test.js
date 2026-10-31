@@ -77,3 +77,11 @@ test('invalid ids, input, pagination and unavailable document rejected',async()=
 test('AI deadline returns retryable 504, stores no partial pair and releases lock',async()=>{
  const ctx=setup({aiFail:504});const res=response();await ctx.ctrl.send(ctx.req,res);assert.equal(res.statusCode,504);assert.equal(ctx.messages.length,0);assert.equal(ctx.conversation.busy_token,null);
 });
+
+test('conversation search keeps user scope, bounds input and filters by title',async()=>{
+ const ctx=setup();let query;
+ ctx.db.conversation.findMany=async args=>{query=args;return [];};
+ const res=response();await ctx.ctrl.list({...ctx.req,query:{search:'React'}},res);
+ assert.equal(query.where.user_id,1);assert.equal(query.where.title.contains,'React');assert.equal(query.where.title.mode,'insensitive');
+ const invalid=response();await ctx.ctrl.list({...ctx.req,query:{search:'a'.repeat(121)}},invalid);assert.equal(invalid.statusCode,400);
+});

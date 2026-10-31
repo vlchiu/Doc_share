@@ -1,3 +1,4 @@
+const { deleteCover } = require('../utils/documentCover');
 // backend/controllers/documentController.js
 const prisma = require('../db');
 const fs = require('fs');
@@ -351,6 +352,7 @@ const updateDocument = async (req, res) => {
       data: updateData
     });
     if (!changed.count) return res.status(409).json({ message: 'Tài liệu đã thay đổi. Vui lòng tải lại trang.' });
+    if(file) await deleteCover(doc.thumbnail_url).catch(()=>{});
     const updatedDoc = await prisma.document.findUnique({ where: { id: doc.id } });
 
     res.status(200).json({ message: "Cập nhật thành công!", document: publicDocument(updatedDoc) });
@@ -439,6 +441,7 @@ const permanentDeleteDocument = async (req, res) => {
     try {
       if (stored.url) await deleteStoredFile(doc.file_url);
       else if (fs.existsSync(stored.path)) await fs.promises.unlink(stored.path);
+      await deleteCover(doc.thumbnail_url).catch(()=>{});
     } catch (error) {
       console.error('Storage cleanup required for deleted document:', doc.id, error.code || error.name);
     }

@@ -1,3 +1,4 @@
+import CoverEditor from "../components/docshare/CoverEditor";
 import { ErrorState } from "../components/docshare/ResourceState";
 import { Panel } from "../components/docshare/Primitives";
 import { DocumentRow } from "../components/docshare/DocumentCard";
@@ -766,6 +767,13 @@ function DocumentDetail() {
         </div>
       </div>
 
+      {(currentUser?.id === doc.user_id || currentUser?.role === "ADMIN") && (
+        <CoverEditor
+          key={`${doc.id}:${doc.content_version}`}
+          doc={doc}
+          onChanged={() => setAttempt((value) => value + 1)}
+        />
+      )}
       {/* ── AI COPILOT CHAT BOX ── */}
       <ChatBox
         key={id}

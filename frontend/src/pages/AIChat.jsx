@@ -38,12 +38,19 @@ function ChatSession({ user }) {
   const [savedDocumentId, setSavedDocumentId] = useState(null);
   const documentId = conversationId ? savedDocumentId : params.get("document");
   const [page, setPage] = useState(1);
+  const [searchDraft, setSearchDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [outgoing, setOutgoing] = useState(null);
   const {
     data: historyPage,
     error: historyError,
     loading: historyLoading,
     retry: refreshHistory,
-  } = useRemoteData(`/chat/conversations?page=${page}`);
+  } = useRemoteData(
+    `/chat/conversations?page=${page}&search=${encodeURIComponent(search)}`,
+  );
   const [opening, setOpening] = useState(!!conversationId);
   const [openError, setOpenError] = useState(null);
   const [attempt, setAttempt] = useState(0);
@@ -162,6 +169,7 @@ function ChatSession({ user }) {
   }
   function acceptResult(savedMessages) {
     pending.current = null;
+    setOutgoing(null);
     setInput("");
     setError("");
     if (!conversationId)
@@ -187,6 +195,7 @@ function ChatSession({ user }) {
     active.current = controller;
     setError("");
     setLoading(true);
+    setOutgoing(content);
     try {
       if (!createdId.current) {
         const { data } = await axiosClient.post(
@@ -242,67 +251,105 @@ function ChatSession({ user }) {
   return (
     <div className="ds-chat">
       <aside className="ds-chat-history">
-        <div className="mb-5 flex items-center justify-between">
-          <h1 className="font-bold">Hội thoại</h1>
-          <button
-            className="ds-icon-button border border-blue-100 text-blue-600"
-            aria-label="Hội thoại mới"
-            onClick={() => navigate(`/ai-chat?new=${crypto.randomUUID()}`)}
+        <button
+          type="button"
+          className="ds-mobile-disclosure ds-button-outline mb-3 w-full"
+          aria-expanded={historyOpen}
+          aria-controls="chat-history-panel"
+          onClick={() => setHistoryOpen((value) => !value)}
+        >
+          Lịch sử hội thoại
+        </button>
+        <div
+          id="chat-history-panel"
+          className={`ds-chat-collapsible ${historyOpen ? "is-open" : ""}`}
+        >
+          <div className="mb-5 flex items-center justify-between">
+            <h1 className="font-bold">Hội thoại</h1>
+            <button
+              className="ds-icon-button border border-blue-100 text-blue-600"
+              aria-label="Hội thoại mới"
+              onClick={() => navigate(`/ai-chat?new=${crypto.randomUUID()}`)}
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-[#7181a8]">
+            Lịch sử được lưu theo tài khoản
+          </p>
+          <form
+            className="mb-3 flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setPage(1);
+              setSearch(searchDraft.trim());
+            }}
           >
-            <Plus size={18} />
-          </button>
-        </div>
-        <p className="mb-3 text-xs text-[#7181a8]">
-          Lịch sử được lưu theo tài khoản
-        </p>
-        {historyLoading ? (
-          <LoadingState label="Đang tải lịch sử…" />
-        ) : historyError ? (
-          <ErrorState error={historyError} onRetry={refreshHistory} />
-        ) : (
-          <>
-            <div className="max-h-64 space-y-2 overflow-y-auto lg:max-h-[65vh]">
-              {historyPage?.conversations?.map((item) => (
-                <Link
-                  key={item.id}
-                  to={`/ai-chat?conversation=${item.id}`}
-                  aria-current={item.id === conversationId ? "page" : undefined}
-                  className={`block rounded-lg p-3 text-xs ${item.id === conversationId ? "border-l-2 border-blue-500 bg-blue-50" : "hover:bg-blue-50"}`}
+            <input
+              aria-label="Tìm hội thoại theo tên"
+              className="ds-input min-w-0 text-xs"
+              value={searchDraft}
+              maxLength={120}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              placeholder="Tìm hội thoại…"
+            />
+            <button className="ds-button-outline text-xs">Tìm</button>
+          </form>
+          {historyLoading ? (
+            <LoadingState label="Đang tải lịch sử…" />
+          ) : historyError ? (
+            <ErrorState error={historyError} onRetry={refreshHistory} />
+          ) : (
+            <>
+              <div className="max-h-64 space-y-2 overflow-y-auto lg:max-h-[65vh]">
+                {historyPage?.conversations?.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={`/ai-chat?conversation=${item.id}`}
+                    aria-current={
+                      item.id === conversationId ? "page" : undefined
+                    }
+                    className={`block rounded-lg p-3 text-xs ${item.id === conversationId ? "border-l-2 border-blue-500 bg-blue-50" : "hover:bg-blue-50"}`}
+                  >
+                    <span className="line-clamp-2 font-semibold">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 block text-[#7181a8]">
+                      {new Date(item.updated_at).toLocaleString("vi-VN")}
+                    </span>
+                  </Link>
+                ))}
+                {!historyPage?.conversations?.length && (
+                  <p className="text-xs text-[#7181a8]">
+                    {search
+                      ? "Không có hội thoại phù hợp."
+                      : "Chưa có hội thoại."}
+                  </p>
+                )}
+              </div>
+              <div className="mt-4 flex justify-between gap-2">
+                <button
+                  disabled={page === 1}
+                  className="ds-button-outline text-xs"
+                  onClick={() => setPage((value) => value - 1)}
                 >
-                  <span className="line-clamp-2 font-semibold">
-                    {item.title}
-                  </span>
-                  <span className="mt-1 block text-[#7181a8]">
-                    {new Date(item.updated_at).toLocaleString("vi-VN")}
-                  </span>
-                </Link>
-              ))}
-              {!historyPage?.conversations?.length && (
-                <p className="text-xs text-[#7181a8]">Chưa có hội thoại.</p>
-              )}
-            </div>
-            <div className="mt-4 flex justify-between gap-2">
-              <button
-                disabled={page === 1}
-                className="ds-button-outline text-xs"
-                onClick={() => setPage((value) => value - 1)}
-              >
-                Trước
-              </button>
-              <button
-                disabled={!historyPage?.hasMore}
-                className="ds-button-outline text-xs"
-                onClick={() => setPage((value) => value + 1)}
-              >
-                Tiếp
-              </button>
-            </div>
-          </>
-        )}
-        <p className="mt-5 text-xs leading-relaxed text-[#7181a8]">
-          Câu hỏi và câu trả lời được lưu cùng nhau khi AI trả lời thành công.
-          Bạn có thể mở lại hoặc xóa hội thoại.
-        </p>
+                  Trước
+                </button>
+                <button
+                  disabled={!historyPage?.hasMore}
+                  className="ds-button-outline text-xs"
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  Tiếp
+                </button>
+              </div>
+            </>
+          )}
+          <p className="mt-5 text-xs leading-relaxed text-[#7181a8]">
+            Câu hỏi và câu trả lời được lưu cùng nhau khi AI trả lời thành công.
+            Bạn có thể mở lại hoặc xóa hội thoại.
+          </p>
+        </div>
       </aside>
       <section className="flex min-w-0 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-blue-100 pb-4">
@@ -385,7 +432,7 @@ function ChatSession({ user }) {
               {olderLoading ? "Đang tải…" : "Tải tin nhắn cũ"}
             </button>
           )}
-          {!messages.length && !opening && !openError && (
+          {!messages.length && !outgoing && !opening && !openError && (
             <div className="m-auto py-16 text-center">
               <Bot size={48} className="mx-auto mb-5 text-blue-500" />
               <h2 className="text-xl font-bold">Tôi có thể giúp gì cho bạn?</h2>
@@ -433,6 +480,16 @@ function ChatSession({ user }) {
               </div>
             </div>
           ))}
+          {outgoing && (
+            <div className="mb-4 ml-auto max-w-[86%] rounded-2xl bg-blue-100/70 p-4 text-sm">
+              <p className="whitespace-pre-wrap break-words">{outgoing}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {loading
+                  ? "Đang gửi · chưa lưu"
+                  : "Chưa xác nhận lưu · có thể gửi lại"}
+              </p>
+            </div>
+          )}
           {loading && (
             <p role="status" className="text-sm text-blue-600">
               AI đang trả lời và lưu hội thoại…
@@ -471,51 +528,67 @@ function ChatSession({ user }) {
         </form>
       </section>
       <aside className="space-y-3">
-        <Panel
-          title={
-            <span className="flex gap-2">
-              <Sparkles className="text-blue-600" />
-              Tác vụ nhanh
-            </span>
-          }
+        <button
+          type="button"
+          className="ds-mobile-disclosure ds-button-outline w-full"
+          aria-expanded={toolsOpen}
+          aria-controls="chat-tools-panel"
+          onClick={() => setToolsOpen((value) => !value)}
         >
-          <div className="space-y-3">
-            {actions.map(([title, prompt, Icon]) => {
-              const ActionIcon = Icon;
-              return (
-                <button
-                  key={title}
-                  className="flex w-full items-center gap-3 rounded-xl border border-blue-100 p-3 text-left text-xs hover:bg-blue-50"
-                  onClick={() => setInput(prompt)}
-                >
-                  <span className="rounded-full bg-blue-50 p-2 text-blue-600">
-                    <ActionIcon size={20} />
-                  </span>
-                  {title}
-                </button>
-              );
-            })}
-          </div>
-        </Panel>
-        <Panel title="Tài liệu đang sử dụng">
-          {document ? (
-            <p className="text-sm">{document.title}</p>
-          ) : (
-            <p className="text-xs leading-relaxed text-[#7181a8]">
-              Chưa chọn tài liệu. Mở chi tiết tài liệu và chọn “Hỏi AI” để bắt
-              đầu.
+          Tác vụ và tài liệu
+        </button>
+        <div
+          id="chat-tools-panel"
+          className={`ds-chat-collapsible space-y-3 ${toolsOpen ? "is-open" : ""}`}
+        >
+          <Panel
+            title={
+              <span className="flex gap-2">
+                <Sparkles className="text-blue-600" />
+                Tác vụ nhanh
+              </span>
+            }
+          >
+            <div className="space-y-3">
+              {actions.map(([title, prompt, Icon]) => {
+                const ActionIcon = Icon;
+                return (
+                  <button
+                    key={title}
+                    className="flex w-full items-center gap-3 rounded-xl border border-blue-100 p-3 text-left text-xs hover:bg-blue-50"
+                    disabled={loading}
+                    onClick={() => setInput(prompt)}
+                  >
+                    <span className="rounded-full bg-blue-50 p-2 text-blue-600">
+                      <ActionIcon size={20} />
+                    </span>
+                    {title}
+                  </button>
+                );
+              })}
+            </div>
+          </Panel>
+          <Panel title="Tài liệu đang sử dụng">
+            {document ? (
+              <p className="text-sm">{document.title}</p>
+            ) : (
+              <p className="text-xs leading-relaxed text-[#7181a8]">
+                Chưa chọn tài liệu. Mở chi tiết tài liệu và chọn “Hỏi AI” để bắt
+                đầu.
+              </p>
+            )}
+            <Link to="/documents" className="mt-3 block text-xs text-blue-600">
+              Chọn tài liệu →
+            </Link>
+          </Panel>
+          <Panel title="Mẹo sử dụng AI Chat" className="!bg-blue-50/70">
+            <p className="text-xs leading-6 text-[#7181a8]">
+              Đặt câu hỏi cụ thể. Bạn có thể yêu cầu tóm tắt, giải thích hoặc
+              tạo câu hỏi ôn tập. Kiểm tra nguồn tài liệu để đối chiếu câu trả
+              lời.
             </p>
-          )}
-          <Link to="/documents" className="mt-3 block text-xs text-blue-600">
-            Chọn tài liệu →
-          </Link>
-        </Panel>
-        <Panel title="Mẹo sử dụng AI Chat" className="!bg-blue-50/70">
-          <p className="text-xs leading-6 text-[#7181a8]">
-            Đặt câu hỏi cụ thể. Bạn có thể yêu cầu tóm tắt, giải thích hoặc tạo
-            câu hỏi ôn tập. Kiểm tra nguồn tài liệu để đối chiếu câu trả lời.
-          </p>
-        </Panel>
+          </Panel>
+        </div>
       </aside>
     </div>
   );

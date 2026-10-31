@@ -17,6 +17,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import axiosClient from "../api/axiosClient";
+import useRemoteData from "../hooks/useRemoteData";
+import { ErrorState } from "../components/docshare/ResourceState";
 import {
   Hero,
   Panel,
@@ -48,7 +50,8 @@ export default function Home({ catalog = false }) {
   const [advanced, setAdvanced] = useState(false);
   const [list, setList] = useState(false);
   const [documents, setDocuments] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const categoryResource = useRemoteData("/categories");
+  const categories = categoryResource.data || [];
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,14 +65,6 @@ export default function Home({ catalog = false }) {
     }, 350);
     return () => clearTimeout(timer);
   }, [search]);
-  useEffect(() => {
-    const controller = new AbortController();
-    axiosClient
-      .get("/categories", { signal: controller.signal })
-      .then((res) => setCategories(res.data || []))
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
   useEffect(() => {
     const controller = new AbortController();
     // A new external request must hide results from the previous filter.
@@ -334,7 +329,11 @@ export default function Home({ catalog = false }) {
                 );
               })}
             </div>
-            {!categories.length && (
+            {categoryResource.loading && <p role="status">Đang tải danh mục…</p>}
+            {categoryResource.error && (
+              <ErrorState title="Chưa thể tải danh mục" error={categoryResource.error} onRetry={categoryResource.retry} />
+            )}
+            {!categoryResource.loading && !categoryResource.error && !categories.length && (
               <p className="text-sm text-slate-500">
                 Danh mục sẽ xuất hiện khi có dữ liệu.
               </p>

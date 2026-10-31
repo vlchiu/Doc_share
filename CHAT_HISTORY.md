@@ -50,3 +50,13 @@ Trước khi đọc/hỏi lại hội thoại tài liệu, kiểm tra quyền t�
 - `frontend/test/docshare-ui.browser.cjs`: regression 10 trang × 3 viewport và luồng API đạt với fixture chat mới.
 - Build frontend đạt; bundle chính vẫn >500 kB. Lint file chat thay đổi không có lỗi/cảnh báo.
 - Chưa gọi Gemini/Groq thật trong lượt kiểm thử này; không chi tiền API AI để kiểm thử lưu trữ.
+
+
+## Cập nhật độ ổn định — 30/10/2026
+
+Handler AI có deadline tổng 45 giây (Gemini tối đa 20 giây mỗi attempt), AbortSignal truyền tới provider và request phụ trợ. Timeout trả 504 và giữ câu hỏi trong ô nhập để thử lại; không lưu cặp tin nhắn chưa hoàn thành. Lease DB 10 phút vẫn chỉ là phương án khôi phục khi tiến trình chết, không phải thời gian chờ AI thông thường. Khi mất HTTP response, frontend thử đọc lại tin nhắn đã lưu theo request ID; không gọi AI để đọc lịch sử. Kiểm thử deadline/provider signal và mất response đã bổ sung. Xem kết quả mới nhất trong QUALITY_REVIEW.md.
+
+
+## UX tiếp theo
+
+Mobile có nút mở/thu gọn lịch sử và tác vụ; tìm tên hội thoại qua query `search` (tối đa 120 ký tự, giới hạn chủ sở hữu); câu hỏi đang gửi hiển thị ngay nhưng chưa được đánh dấu đã lưu. Xem `DOCUMENT_COVERS.md` và cập nhật cuối PROJECT_PROGRESS.md.

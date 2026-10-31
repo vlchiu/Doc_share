@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 (async () => {
   const browser = await chromium.launch({
-    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+    executablePath: process.env.CHROME_PATH || undefined,
     headless: true,
     args: ["--no-sandbox"],
   });
@@ -145,7 +145,7 @@ const fs = require("node:fs");
     return route.fulfill({ json: data });
   });
   const base = process.env.TEST_BASE_URL || "http://127.0.0.1:5174";
-  fs.mkdirSync("/tmp/docshare-ui-shots", { recursive: true });
+  fs.mkdirSync(require("node:path").join(require("node:os").tmpdir(), "docshare-ui-shots"), { recursive: true });
   const paths = [
     "/",
     "/login",
@@ -179,7 +179,7 @@ const fs = require("node:fs");
         `${path} overflow ${JSON.stringify(overflow)}`,
       );
       await page.screenshot({
-        path: `/tmp/docshare-ui-shots/${path.replaceAll("/", "_") || "home"}-${width}.png`,
+        path: `${require("node:os").tmpdir()}/docshare-ui-shots/${path.replaceAll("/", "_") || "home"}-${width}.png`,
         fullPage: true,
       });
       console.log("PASS", path, width);

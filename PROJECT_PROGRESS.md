@@ -89,3 +89,40 @@ Người dùng yêu cầu triển khai lưu hội thoại, cho phép mở rộng
 - Bàn giao/API/triển khai/giới hạn chi tiết: `CHAT_HISTORY.md`. Tính năng lưu lịch sử không cần thuê thêm server; cần chạy backend/frontend source mới. Các mục cũ trong file này ghi “chỉ phiên hiện tại” đã được thay thế bởi phần cập nhật này.
 
 Xác nhận cuối phần chat: kiểm thử lịch sử trình duyệt đã PASS sau khi chờ đúng màn hình mới của React Router; lịch sử hiển thị ở cả 1440/768/375 px. Đã xem screenshot mobile. Bộ UX (retry, menu Tab/Escape, FAQ, thumbnail, support) chạy lại PASS sau sửa sidebar. Build và lint chat cuối cùng đạt, `git diff --check` đạt. Vite kiểm thử đã được dừng; chưa khởi động lại/deploy tiến trình backend của người dùng.
+
+
+## Hoàn tất hai nhóm độ ổn định + tối ưu tải trang — 30/10/2026
+
+Người dùng đã xác nhận phạm vi hai nhóm (không chỉ hai dòng đầu bảng review). Đã hoàn thành:
+
+- Backend runtime `node index.js`, kiểm tra bản cài production riêng ở /tmp/docshare-production-check bằng npm ci --omit=dev + Prisma generate + HTTP health với thông tin giả.
+- AI deadline tổng 45s, per-attempt Gemini 20s, AbortSignal, timeout504 không lưu dở/không giữ khóa; UI phục hồi cặp tin nhắn đã commit khi HTTP response bị mất.
+- Polling SePay tuần tự và hủy request, không xử lý thành công của đơn đã đóng; không reload trang sau kích hoạt VIP, clipboard await/catch.
+- Admin users/AI moderation dùng useLatestRequest để chống response cũ; search theo nút/Enter.
+- Lazy routes + Suspense + RouteBoundary, không tải trước Admin/chart/AI Chat trên trang chủ. Lint toàn frontend sạch.
+- JS tải ban đầu cả entry/modulepreload: 462.360 byte, gzip cộng 156.475 byte (trước ~1.118 MB/~338 KB gzip). Không còn chunk >500 KB. Không khẳng định đây là số đo tốc độ trên thiết bị thật.
+
+Kiểm tra cuối: backend 69/69, poller3/3; production startup smoke; lint/build; production browser regression10×3, chat-history/mất response, stale admin search, thanh toán chậm/hủy/thành công và lỗi chunk tải lại đều PASS. git diff --check đạt. Cập nhật QUALITY_REVIEW.md và CHAT_HISTORY.md. Không deploy hosting, không thay schema/database hoặc gọi provider thật trong lượt này. Không tự làm tiếp thumbnail/UX mobile/quota/live E2E vì nằm ngoài hai nhóm đã chọn.
+
+Preview production phục vụ kiểm thử đã dừng. Nếu tiếp tục, đọc phần cập nhật đầu QUALITY_REVIEW.md để tránh làm lại các mục đã hoàn thành. Working tree có thể đã được người dùng commit trong quá trình thực hiện; luôn kiểm tra git status trước khi chỉnh sửa, không reset.
+
+
+## Tiếp tục ảnh bìa an toàn và UX Chat
+
+Người dùng yêu cầu làm các phần tiếp theo. Đã hoàn thành ảnh bìa chọn riêng trên chi tiết tài liệu (owner/admin), chuẩn hóa bằng sharp, Cloudinary authenticated asset riêng và proxy WebP có kiểm tra quyền/version; không lộ tệp gốc, không trừ quota tải. Dùng thumbnail_url cũ, không migration. Thêm dependency sharp vào backend production; chưa gọi Cloudinary thật hoặc deploy.
+
+AI Chat: thu gọn lịch sử/tác vụ trên mobile, tìm tên hội thoại trên server theo owner, câu hỏi pending hiển thị ngay có trạng thái chưa lưu; giữ retry/idempotency. Desktop giữ layout cũ. Đã bổ sung hướng dẫn ảnh bìa trong trang Help.
+
+Kiểm chứng: backend76/76; frontend lint sạch/build đạt; browser covers-mobile và chat-history, regression10route×3viewport đều PASS. Đã xem screenshot mobile. Test files: backend/test/covers.test.js, frontend/test/covers-mobile.browser.cjs; bàn giao `DOCUMENT_COVERS.md`. Các lượt test dùng API/provider mock, riêng chuẩn hóa ảnh dùng sharp thật. Chưa thực hiện quota dài hạn/live E2E/backup restore/load test. Preview kiểm thử đã dừng.
+
+## Sửa kết nối local cổng 5174 — 31/10/2026
+
+Ảnh người dùng mở localhost:5174, trong khi backend allowlist chỉ có localhost:5173 và frontend gọi localhost:5000. Đã thêm origin localhost:5174 vào backend/.env local (không đổi chính sách CORS production). Cần restart backend để áp dụng. Home dùng useRemoteData cho danh mục để phân biệt loading/error/empty và có retry, không nuốt lỗi thành danh mục rỗng. Frontend lint/build đạt; chưa xác minh HTTP với backend đang chạy của người dùng.
+
+## Chuẩn hóa local và kiểm thử một lệnh — 31/10/2026
+
+Đã thêm package.json gốc + scripts/workspace.cjs: setup, dev, test, test:browser, test:all, browser:install. Dev chạy hai ứng dụng, đồng bộ API theo PORT backend, thêm origin local vào môi trường tiến trình; Vite cố định 5173/strictPort. Không ghi đè .env, không migrate database. Backend có script generate riêng để npm --prefix chạy đúng thư mục Prisma.
+
+Playwright là devDependency frontend (lockfile cập nhật); browser mặc định dùng Chromium Playwright, CHROME_PATH tùy chọn, ảnh test dùng thư mục tạm hệ điều hành. Runner test build API giả lập, mở preview cổng 4174, chạy sáu suite tuần tự và đóng preview. Đã thêm GitHub Actions Node22; chưa chạy trên GitHub/Windows. Hướng dẫn LOCAL_TESTING.md.
+
+Kiểm chứng local: CHROME_PATH=/usr/bin/google-chrome npm run test:all đạt exit0, backend76/76, poller3/3, lint/build, sáu suite trình duyệt. Prisma generate từ gốc đạt. Không chạy dev với database live, không gọi provider/email/thanh toán thật. Test bị sandbox chặn HTTP lúc đầu, chạy lại ngoài sandbox thành công. npm install báo 35 cảnh báo dependency (2 low,14 moderate,18 high,1 critical); chưa audit phân loại production/dev hay tự nâng version phá vỡ tương thích. Cần rà riêng. Chưa commit/deploy.

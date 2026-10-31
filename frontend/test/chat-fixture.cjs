@@ -25,6 +25,13 @@ module.exports = function chatFixture() {
           data = {
             conversations: [...conversations.values()]
               .map((row) => row.conversation)
+              .filter((row) =>
+                row.title
+                  .toLocaleLowerCase()
+                  .includes(
+                    (url.searchParams.get("search") || "").toLocaleLowerCase(),
+                  ),
+              )
               .reverse(),
             hasMore: false,
           };

@@ -2,7 +2,29 @@
 
 Phạm vi: đọc source hiện tại, chạy lại build/lint toàn frontend và 64 kiểm thử backend. Tham chiếu kiểm thử trình duyệt/mock API và PostgreSQL smoke check đã đạt trong lượt triển khai trước; không chạy lại toàn bộ E2E/live provider trong lượt đánh giá này. Không sửa source nghiệp vụ trong lượt này.
 
-## Kết luận
+## Cập nhật sau triển khai — 30/10/2026
+
+Người dùng đã xác nhận phạm vi: **hai nhóm độ ổn định và tối ưu tải trang**. Hai nhóm này đã hoàn thành; các nhận xét bên dưới là kết quả rà soát trước khi sửa.
+
+- Production: `npm start` dùng `node index.js`, không phụ thuộc executable tsx ở devDependencies. Đã kiểm chứng bằng bản cài riêng `npm ci --omit=dev`, generate Prisma Client và gọi HTTP health endpoint với cấu hình giả; không dùng database thật.
+- AI: deadline tổng 45 giây cho handler chat; Gemini giới hạn 20 giây mỗi lượt, truyền AbortSignal xuống Gemini/Groq và request phụ trợ. Timeout trả 504, không lưu cặp tin nhắn dở dang và giải phóng khóa. Client vẫn chờ 60 giây; nếu mất phản hồi mạng sẽ thử đọc lại cặp tin nhắn theo request ID trước khi báo lỗi. Thời gian DB/network ngoài handler AI vẫn phụ thuộc hạ tầng.
+- Thanh toán: polling tuần tự, dùng chung request cho kiểm tra thủ công/tự động, hủy khi đóng hoặc rời trang, bỏ qua phản hồi cũ. Cập nhật VIP qua state thay vì reload toàn trang; clipboard chỉ báo thành công khi sao chép xong.
+- Quản trị: hủy request cũ của tìm người dùng và AI moderation, kiểm tra signal trước khi cập nhật dữ liệu; giữ tìm kiếm theo nút/Enter và giá trị tìm kiếm đã gửi khi đổi trang.
+- Frontend: lazy load các route, giữ trang chủ trực tiếp; Suspense có trạng thái tải, error boundary có nút tải lại khi chunk lỗi. Admin/chart/AI Chat không tải trước trên trang chủ.
+- Lint toàn frontend: **0 lỗi, 0 cảnh báo**. Giữ export API của UI primitives bằng cấu hình Fast Refresh có phạm vi rõ ràng; sửa alias Motion và Vite ESM path.
+- Tổng JavaScript được index.html yêu cầu ban đầu (entry + modulepreload): **462.360 byte**, gzip cộng theo từng tệp **156.475 byte**, so với bundle trước khoảng **1.117.980 byte / 337.600 byte gzip**. Giảm khoảng **59% / 54%**; đây là lượng mã tải, không phải phép đo tốc độ thực tế. Entry riêng khoảng 212 KB; chunk lớn nhất khoảng 325 KB; build không còn cảnh báo chunk >500 KB.
+
+Kiểm chứng: backend **69/69**; poller **3/3**; smoke production startup đạt; build và lint đạt; browser trên bản production đạt regression 10 màn hình × 3 viewport, lịch sử chat (gồm phục hồi phản hồi bị mất), stale admin response, thanh toán chậm/hủy/thành công, lazy loading và phục hồi lỗi chunk. Không gọi dịch vụ AI/email/payment thật, không load test và không deploy hosting trong tác vụ này.
+
+Các phần chưa thực hiện: ảnh bìa an toàn, các cải tiến UX/mobile ngoài phạm vi trên, quota dài hạn, E2E provider thật và đo tải. Không còn coi mục runtime/AI timeout/polling/race/lint/bundle bên dưới là việc chưa sửa.
+
+## Tiếp tục: ảnh bìa và UX AI Chat
+
+Đã triển khai ảnh bìa riêng do tác giả/admin chọn, chuẩn hóa WebP và proxy có phân quyền; thay bìa cần duyệt lại. AI Chat mobile có thu gọn lịch sử/tác vụ, tìm tên hội thoại phía server và câu hỏi đang gửi có trạng thái chưa lưu. Kiểm chứng: backend76/76, frontend lint/build, browser production bìa/mobile và regression10×3/lịch sử chat đạt. Không tự trích bìa từ tệp gốc và chưa gọi Cloudinary thật. Xem `DOCUMENT_COVERS.md`.
+
+Việc còn lại chủ yếu là quota dài hạn, backup/restore, E2E provider thật và đo tải; giảm reload Profile và tách module Admin vẫn là cải thiện tùy chọn chưa làm.
+
+## Kết luận rà soát ban đầu
 
 Giao diện và luồng chính phù hợp bản thử nghiệm. Chưa đủ bằng chứng để kết luận mọi function đúng hoặc hệ thống chạy mượt ở môi trường thật/có tải. Build đạt; backend tests 64/64 đạt; lint toàn frontend chưa sạch (6 lỗi, 2 warnings).
 
@@ -33,3 +55,7 @@ Giao diện và luồng chính phù hợp bản thử nghiệm. Chưa đủ bằ
 - Tách AdminDashboard (~2.205 dòng) thành module/tab và tách logic AI khỏi Express handler để dễ kiểm thử; làm sau các lỗi hành vi nêu trên.
 
 Thứ tự đề xuất: runtime production → AI timeout/polling/race → lint → bundle → thumbnail → UX mobile → E2E thật và đo tải.
+
+## Cập nhật chuẩn hóa local/test — 31/10/2026
+
+Đã có lệnh gốc npm run dev và npm run test:all, dependency Playwright trong repo, browser không bắt buộc Chrome Linux, workflow CI và LOCAL_TESTING.md. Local xác minh backend76/poller3/lint/build/sáu browser suites đạt. CI mới được chuẩn bị, chưa xác minh lần chạy GitHub; Windows chưa chạy thực tế. Vite strictPort tránh tự đổi cổng gây CORS. Các kiểm thử vẫn mock provider, chưa thay thế live E2E. Cần rà cảnh báo dependency npm install (35 tổng, có high/critical) để phân biệt ảnh hưởng runtime/dev và lập nâng cấp có kiểm thử; chưa dùng audit fix --force.

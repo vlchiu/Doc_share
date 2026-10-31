@@ -1,4 +1,4 @@
-import { useState } from "react";
+import CoverImage from "./CoverImage";
 import { Link } from "react-router-dom";
 import { FileText, Eye, ArrowRight, Download } from "lucide-react";
 import { getFileLabel, FILE_BADGE_COLORS } from "../../utils/fileHelper";
@@ -16,39 +16,39 @@ export function FileBadge({ doc }) {
   );
 }
 export function DocumentThumbnail({ doc, className = "" }) {
-  const [failedUrl, setFailedUrl] = useState(null);
   const label = getFileLabel(doc.file_type, doc.file_url);
   const color = FILE_BADGE_COLORS[label] || FILE_BADGE_COLORS.TXT;
+  const fallback = (
+    <div
+      aria-hidden="true"
+      style={{ background: color.bg, color: color.color }}
+      className="flex h-full items-center justify-center"
+    >
+      <div className="rotate-[-8deg] rounded-lg border border-white bg-white/80 p-5 shadow-lg shadow-blue-200/60">
+        <FileText size={32} />
+        <span className="mt-1 block text-center text-xs font-bold">
+          {label}
+        </span>
+      </div>
+    </div>
+  );
   return (
     <div
-      className={`relative overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 to-cyan-100 ${className}`}
+      className={`relative overflow-hidden rounded-lg bg-blue-50 ${className}`}
     >
-      {doc.thumbnail_url && failedUrl !== doc.thumbnail_url ? (
-        <img
-          src={doc.thumbnail_url}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={() => setFailedUrl(doc.thumbnail_url)}
-          className="h-full w-full object-cover"
+      {doc.thumbnail_url ? (
+        <CoverImage
+          key={doc.thumbnail_url}
+          url={doc.thumbnail_url}
+          fallback={fallback}
         />
       ) : (
-        <div
-          aria-hidden="true"
-          style={{ background: color.bg, color: color.color }}
-          className="flex h-full items-center justify-center"
-        >
-          <div className="rotate-[-8deg] rounded-lg border border-white bg-white/80 p-5 shadow-lg shadow-blue-200/60">
-            <FileText size={32} />
-            <span className="mt-1 block text-center text-xs font-bold">
-              {label}
-            </span>
-          </div>
-        </div>
+        fallback
       )}
     </div>
   );
 }
+
 export default function DocumentCard({ doc, list = false, compact = false }) {
   return (
     <article className={`ds-document-card ${list ? "ds-document-list" : ""}`}>

@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
+  server: { port: 5173, strictPort: true },
   plugins: [
     react(),
     tailwindcss(),

@@ -1,0 +1,12 @@
+{
+  "name": "docshare-workspace",
+  "private": true,
+  "scripts": {
+    "setup": "npm --prefix backend ci && npm --prefix backend run generate && npm --prefix frontend ci",
+    "dev": "node scripts/workspace.cjs dev",
+    "test": "node scripts/workspace.cjs test",
+    "test:browser": "node scripts/workspace.cjs browser",
+    "test:all": "node scripts/workspace.cjs all",
+    "browser:install": "npm --prefix frontend exec playwright install chromium"
+  }
+}
