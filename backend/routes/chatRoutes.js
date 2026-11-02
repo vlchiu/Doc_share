@@ -5,6 +5,7 @@ const { verifyToken } = require('../middleware/authMiddleware');
 const { documentAccess } = require('../utils/documentAccess');
 const { aiLimit } = require('../middleware/rateLimits');
 const router = express.Router();
+const { limitedChat } = require('../utils/accountQuota');
 const conversations = require('../controllers/conversationController');
 router.get('/conversations', verifyToken, conversations.list);
 router.post('/conversations', verifyToken, aiLimit, conversations.create);
@@ -14,9 +15,9 @@ router.delete('/conversations/:id', verifyToken, conversations.remove);
 router.post('/conversations/:id/messages', verifyToken, aiLimit, conversations.send);
 
 // Chat chung — không gắn tài liệu cụ thể
-router.post('/general', verifyToken, aiLimit, chatGeneral);
+router.post('/general', verifyToken, aiLimit, limitedChat(chatGeneral));
 
 // Chat với tài liệu cụ thể
-router.post('/:docId', verifyToken, aiLimit, documentAccess({ param: 'docId' }), chatWithDocument);
+router.post('/:docId', verifyToken, aiLimit, documentAccess({ param: 'docId' }), limitedChat(chatWithDocument));
 
 module.exports = router;

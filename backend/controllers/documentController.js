@@ -1,3 +1,4 @@
+const { persist } = require('../middleware/storageQuota');
 const { deleteCover } = require('../utils/documentCover');
 // backend/controllers/documentController.js
 const prisma = require('../db');
@@ -48,18 +49,19 @@ const uploadDocument = async (req, res) => {
     // Generate thumbnail URL
     const thumbnailUrl = generateThumbnailUrl(fileUrl, req.file.mimetype);
 
-    const newDoc = await prisma.document.create({
+    const newDoc = await persist(req, tx => tx.document.create({
       data: {
         title: title.trim(),
         description: description?.trim() || null,
         file_url: fileUrl,
         file_type: req.file.mimetype,
+        file_size: Number.isSafeInteger(req.file.size) ? req.file.size : null,
         thumbnail_url: thumbnailUrl,
         category_id: parseInt(category_id),
         user_id: userId,
         doc_type: validDocType
       }
-    });
+    }));
 
     res.status(201).json({ message: "Tải lên thành công chờ duyệt!", document: publicDocument(newDoc) });
 
@@ -344,13 +346,14 @@ const updateDocument = async (req, res) => {
       const fileUrl = file.secure_url || file.path;
       updateData.file_url = fileUrl;
       updateData.file_type = file.mimetype;
+      updateData.file_size = Number.isSafeInteger(file.size) ? file.size : null;
       updateData.thumbnail_url = generateThumbnailUrl(fileUrl, file.mimetype);
     }
 
-    const changed = await prisma.document.updateMany({
+    const changed = await persist(req, tx => tx.document.updateMany({
       where: { id: doc.id, content_version: doc.content_version, deleted_at: null, removed_by_admin: false },
       data: updateData
-    });
+    }));
     if (!changed.count) return res.status(409).json({ message: 'Tài liệu đã thay đổi. Vui lòng tải lại trang.' });
     if(file) await deleteCover(doc.thumbnail_url).catch(()=>{});
     const updatedDoc = await prisma.document.findUnique({ where: { id: doc.id } });

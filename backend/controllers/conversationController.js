@@ -1,3 +1,4 @@
+const quota = require('../utils/accountQuota');
 const prisma = require('../db');
 const { randomUUID } = require('node:crypto');
 const { canReadDocument } = require('../utils/documentAccess');
@@ -87,6 +88,7 @@ exports.send = endpoint(async (req, res) => {
     if (previous.find(row => row.role === 'user')?.content !== message.trim()) throw fail(409, 'Mã gửi đã được dùng cho câu hỏi khác.');
     return res.json({ messages: previous });
   }
+  let quotaId;
   const token = randomUUID();
   const locked = await prisma.conversation.updateMany({ where: { id: conversation.id, user_id: req.user.userId,
     OR: [{ busy_until: null }, { busy_until: { lt: new Date() } }] }, data: { busy_token: token, busy_until: new Date(Date.now() + 10 * 60 * 1000) } });
@@ -98,6 +100,7 @@ exports.send = endpoint(async (req, res) => {
       if (replay.find(row => row.role === 'user')?.content !== message.trim()) throw fail(409, 'Mã gửi đã được dùng cho câu hỏi khác.');
       return res.json({ messages: replay });
     }
+    quotaId = await quota.reserve(req.user.userId, 'AI');
     const recent = await prisma.chatMessage.findMany({ where: { conversation_id: conversation.id }, orderBy: { id: 'desc' }, take: 10 });
     const reply = await generate(req, conversation, message.trim(), recent.reverse().map(row => ({ role: row.role, content: row.content.slice(0, 16000) })));
     const messages = await prisma.$transaction(async tx => {
@@ -107,10 +110,12 @@ exports.send = endpoint(async (req, res) => {
       if (!updated.count) throw fail(409, 'Hội thoại đã thay đổi. Hãy tải lại trước khi gửi tiếp.');
       const question = await tx.chatMessage.create({ data: { conversation_id: conversation.id, request_id: requestId, role: 'user', content: message.trim() } });
       const answer = await tx.chatMessage.create({ data: { conversation_id: conversation.id, request_id: requestId, role: 'assistant', content: reply } });
+      await quota.complete(quotaId, tx);
       return [question, answer];
     });
     res.json({ messages });
   } finally {
+    await quota.release(quotaId).catch(() => {});
     try {
       await prisma.conversation.updateMany({ where: { id: conversation.id, busy_token: token }, data: { busy_token: null, busy_until: null } });
     } catch (error) {

@@ -136,3 +136,27 @@ Thêm backend/test/sepay-payment.test.js với 8 ca nghiệp vụ SePay (giá se
 Thêm test:database (PostgreSQL tạm Unix socket, migrations + integration concurrency + pg_dump/restore so sánh14 bảng/chat/sequence), test:security (npm audit production/all hai app + tracked dump/env), test:staging (explicit staging URL/two tokens/private doc fixture, GET quyền/lists/history/timings). Không dùng DB live hoặc gửi email/thanh toán.
 
 Đã chạy test:database PASS PostgreSQL14, cluster tự dọn. test:security FAIL có high/critical cả production/dev và tracked backup.sql, frontend/.env, frontend/.env.production. Không in nội dung bí mật, không sửa dependency/delete Git. test:staging mới syntax checked, chưa chạy live do thiếu staging fixture. LOCAL_TESTING.md phân biệt rõ nhóm còn thiếu: order expiry/late transfer, AI/storage quota, live upload/AI/OTP, backup schedule/cloud assets, load. Không tuyên bố sáu nhóm đều đạt. Các script mới được gọi riêng, không nối vào CI/test:all mặc định.
+
+## Làm lần lượt kế hoạch hoàn thiện — bắt đầu bảo mật, 02/11/2026
+
+User yêu cầu làm tuần tự bảo mật → quota AI/dung lượng → SePay → dịch vụ thật → bộ sưu tập. Đợt này nâng dependency tương thích, Cloudinary2/Nodemailer10, bỏ SendGrid không dùng; untrack dump/env giữ file local. Không commit/deploy, không rewrite history. Audit high/critical=0; moderate/low còn được ghi rõ trong SECURITY_CHANGES.md. test:security PASS. Hai test SDK local bổ sung đạt; regression toàn ứng dụng đang chạy. Những nhóm quota/SePay expiry/bộ sưu tập chưa triển khai; staging cần URL/tài khoản/fixture riêng. Không được coi mọi nhóm hoàn tất chỉ từ kết quả audit.
+
+Xác nhận cuối đợt bảo mật: test:all exit0 (backend84/84, poller3/3, lint/build và sáu bộ browser); hai test SDK bổ sung chạy riêng đạt2/2. Không chạy lại toàn suite sau thêm test không đổi source. Preview test tự đóng. Không gọi provider thật.
+
+## Hoàn tác untrack theo yêu cầu — 02/11/2026
+
+User xác nhận production Render/Vercel tự deploy khi push và yêu cầu revert phần bỏ theo dõi file. Đã git restore --staged chỉ backup.sql, frontend/.env, frontend/.env.production để giữ trạng thái tracked trước đó, không sửa nội dung file. Giữ các bản vá dependency. Không push/deploy. Kết quả test:security PASS trước đây không còn áp dụng cho kiểm tra tracked artifacts vì ba file đã được theo dõi lại.
+
+## Hạn mức AI Chat và dung lượng tài liệu — 02/11/2026
+
+Thêm migration additive 20261102090000_account_quotas (Document.file_size nullable, UsageReservation FK user), chưa áp dụng production. Flag ACCOUNT_QUOTAS_ENABLED mặc định false; Free/VIP AI daily và storage MB từ env,0 unlimited. Chat lưu reserve sau replay/lock, complete cùng transaction tin nhắn, failure refund; legacy endpoints bọc quota. Reset ngày UTC+7; VIP expired về Free. Storage reserve theo upper bound Content-Length trước Cloudinary, persist document/size + release cùng transaction; trash vẫn tính. Legacy null size chặn khi bật storage limit; có script backfill dry-run/--apply metadata Cloudinary chưa chạy thật.
+
+Profile có UsagePanel/API auth/usage JWT/no-store. ACCOUNT_QUOTAS.md mô tả triển khai Render/Vercel, mặc định chưa chặn, scope không gồm WebSearch/AI moderation/avatar/cover/chat bytes và cần đối soát pending sau crash. Không áp mức Free/VIP tự chọn, không push/deploy. Cần chủ dự án đặt env và backfill trước bật.
+
+Validation: Prisma generate đạt; lint/build và sáu browser suite (quota off) đạt; backend90/90 đạt. PostgreSQL tạm concurrency AI/storage, refund/reset/VIP/unknown bytes/trash/delete và restore15 bảng đạt; bổ sung replay/failure chat integration đang kiểm tra lần cuối. Không gọi Cloudinary/email/AI thật hoặc chạy backfill thật.
+
+Xác nhận cuối quota: test:database exit0, gồm AI lỗi refund, retry thành công, replay không trừ thêm và câu hỏi mới bị429 khi hết lượt. PostgreSQL tạm đã dừng/dọn. Không có migration chạy vào database hiện tại.
+
+## Áp dụng migration quota theo xác nhận — 02/11/2026
+
+Local lỗi tải tài liệu: kiểm tra chỉ đọc xác nhận Document.file_size và UsageReservation chưa tồn tại, Prisma P2022. User đã đồng ý áp migration vào database cấu hình hiện tại (có thể dùng chung production). Kiểm tra chỉ có 20261102090000_account_quotas pending; prisma migrate deploy exit0. Sau đó truy vấn danh sách tài liệu kèm category/user và bảng quota thành công. Không sửa dữ liệu tài liệu, không bật quota, không push/deploy. Các ghi chú trước nói chưa áp dụng migration đã được thay thế bởi cập nhật này.

@@ -1,3 +1,4 @@
+import UsagePanel from "../components/docshare/UsagePanel";
 import useRemoteData from "../hooks/useRemoteData";
 import { LoadingState, ErrorState } from "../components/docshare/ResourceState";
 import { Link } from "react-router-dom";
@@ -369,6 +370,7 @@ function Profile() {
             </>
           )}
         </Panel>
+        <UsagePanel />
         <VipPromo />
       </aside>
     </div>

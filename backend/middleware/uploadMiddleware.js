@@ -70,7 +70,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: MAX_SIZE } });
+const upload = multer({ storage: require('./storageQuota').wrapStorage(storage), fileFilter, limits: { fileSize: MAX_SIZE } });
 
 module.exports = upload;
 module.exports.cloudinary = cloudinary;

@@ -19,10 +19,9 @@
     "@google/generative-ai": "^0.21.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.8.0",
-    "@sendgrid/mail": "^8.1.6",
     "axios": "^1.16.1",
     "bcryptjs": "^3.0.3",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.11.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
@@ -33,7 +32,7 @@
     "mammoth": "^1.13.0",
     "multer": "^2.1.1",
     "multer-storage-cloudinary": "^4.0.0",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^10.3.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pdf-parse": "^2.4.5",
@@ -44,5 +43,10 @@
   "devDependencies": {
     "nodemon": "^3.1.14",
     "tsx": "^4.22.0"
+  },
+  "overrides": {
+    "multer-storage-cloudinary": {
+      "cloudinary": "$cloudinary"
+    }
   }
 }

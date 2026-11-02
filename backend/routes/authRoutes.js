@@ -13,6 +13,7 @@ router.post('/resend-verify', emailLimit, resendVerifyEmail);
 router.post('/forgot-password', emailLimit, forgotPassword);
 router.post('/reset-password', authLimit, resetPassword);
 
+router.get('/usage', verifyToken, require('../utils/accountQuota').usage);
 router.get('/me', verifyToken, getMe);
 router.put('/update-profile', verifyToken, upload.single('avatar'), updateProfile);
 router.put('/change-password', verifyToken, authLimit, changePassword);

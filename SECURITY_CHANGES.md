@@ -89,3 +89,16 @@ Bốn kiểm thử mới xác nhận bộ lọc bảo vệ, thời hạn token, 
 Trang quản lý người dùng có nút Xóa tài khoản, yêu cầu nhập chính xác email xác nhận. API `DELETE /api/admin/users/:id` kiểm tra quyền admin, ID, không cho tự xóa hoặc xóa admin. Tài khoản có tài liệu (kể cả trong thùng rác), bất kỳ đơn thanh toán hoặc báo cáo vi phạm bị từ chối xóa; dùng khóa tài khoản để giữ lịch sử. Các tài khoản khác được xóa vĩnh viễn cùng bình luận, đánh giá, mục đã lưu, lịch sử tải, thông báo và quan hệ theo dõi trong transaction Serializable. Không xóa asset avatar trên Cloudinary trong luồng này. Session của tài khoản đã xóa không còn xác thực được do middleware kiểm tra DB.
 
 Bốn testcase dùng database giả lập đạt: phân quyền/xác nhận, bảo vệ tài khoản có dữ liệu cần lưu, xóa thành công/không tìm thấy, rollback khi lỗi FK. Frontend build đạt. Không xóa tài khoản thật khi kiểm thử. Không cần migration; khởi động lại backend và tải lại frontend để sử dụng.
+
+## Dependency và tệp cấu hình — 02/11/2026
+
+- Cập nhật lockfile bằng npm audit fix trong phạm vi tương thích, không dùng --force.
+- Cloudinary lên ^2.11.0, Nodemailer lên ^10.3.1; override peer Cloudinary của multer-storage-cloudinary về cùng SDK đang dùng. Thêm sdk-compatibility.test.js kiểm tra adapter truyền đúng private/raw upload và Nodemailer tạo MIME bằng stream local.
+- Loại @sendgrid/mail vì source email chỉ dùng Nodemailer; Prisma Client generate lại theo lockfile mới.
+- Bỏ theo dõi backup.sql, frontend/.env, frontend/.env.production; giữ file trên ổ đĩa. Các thay đổi bỏ theo dõi đã staged, chưa commit. Không xóa lịch sử Git; nếu khóa bí mật từng push thì cần thu hồi/thay khóa qua tài khoản dịch vụ tương ứng.
+- Audit sau vá: backend production0; backend all2 moderate; frontend production2 low/4 moderate; frontend all2 low/9 moderate; cả hai không còn high/critical. Gate test:security chỉ chặn high/critical và tracked dump/env, PASS không có nghĩa không còn cảnh báo. Không ép downgrade shadcn/nodemon hoặc override minimatch major chỉ để làm audit xanh.
+- Chưa gửi email/upload Cloudinary thật. Cần xác minh staging trước triển khai SDK mới. Khuyến nghị Node22 theo hướng dẫn local; môi trường kiểm tra hiện dùng Node20.19.5 và dependency Prisma tùy chọn có cảnh báo engine >=22.
+
+### Đính chính theo yêu cầu người dùng — 02/11/2026
+
+Đã hoàn tác riêng việc untrack backup.sql, frontend/.env và frontend/.env.production để giữ quy trình deploy hiện tại. Nội dung file không thay đổi; dependency patches giữ nguyên. Ba file lại được Git theo dõi, nên gate test:security sẽ báo tracked artifacts trở lại. Không coi kết quả PASS trước khi hoàn tác là trạng thái hiện tại. Chưa push/deploy.

@@ -34,7 +34,7 @@ router.delete('/history/clear', verifyToken, clearDownloadHistory);
 router.delete('/history/:historyId', verifyToken, deleteDownloadHistory);
 router.get('/user/:userId', getUserDocuments);
 router.get('/trash', verifyToken, getTrashDocuments);
-router.post('/upload', verifyToken, upload.single('file'), uploadDocument);
+router.post('/upload', verifyToken, require('../middleware/storageQuota').cleanup, upload.single('file'), uploadDocument);
 
 // ── Error handler cho multer (v2 dùng next(err) thay vì throw) ───────────────
 // eslint-disable-next-line no-unused-vars
@@ -46,7 +46,7 @@ router.use('/upload', (err, req, res, next) => {
     return res.status(400).json({ message: 'Tên field file không hợp lệ. Vui lòng dùng field "file".' });
   }
   if (err) {
-    return res.status(400).json({ message: err.message || 'Lỗi khi tải file lên.' });
+    return res.status(err.status || 400).json({ code: err.code, message: err.message || 'Lỗi khi tải file lên.' });
   }
   next();
 });
@@ -87,7 +87,7 @@ router.get('/', getAllDocuments);
 
 // --- DYNAMIC ROUTES /:id (phải đặt SAU static) ---
 router.get('/:id', optionalAuth, documentAccess(), getDocumentById);
-router.put('/:id', verifyToken, documentAccess({ manage: true }), upload.single('file'), updateDocument);
+router.put('/:id', verifyToken, documentAccess({ manage: true }), require('../middleware/storageQuota').cleanup, upload.single('file'), updateDocument);
 router.delete('/:id', verifyToken, documentAccess({ manage: true, includeDeleted: false }), deleteDocument);
 router.put('/:id/approve', verifyToken, approveDocument);
 router.put('/:id/reject', verifyToken, rejectDocument);
@@ -100,5 +100,10 @@ router.get('/:id/comments', optionalAuth, documentAccess(), getComments);
 router.post('/:id/comments', verifyToken, documentAccess(), addComment);
 router.post('/:id/rate', verifyToken, documentAccess(), rateDocument);
 router.post('/:id/report', verifyToken, documentAccess(), reportDocument);
+
+router.use((error, req, res, next) => {
+  if (error.status || error.code?.startsWith('LIMIT_')) return res.status(error.status || 400).json({ code: error.code, message: error.message });
+  next(error);
+});
 
 module.exports = router;

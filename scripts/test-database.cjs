@@ -28,6 +28,7 @@ try {
   }
   env.TEST_DATABASE_URL = `postgresql://docshare_test@localhost:55439/source?host=${encodeURIComponent(dir)}`;
   console.log(run(process.execPath, ['backend/test/postgres.integration.js']));
+  console.log(run(process.execPath, ['backend/test/quotas.integration.js']));
   // Include chat relations and Unicode in the restore fixture.
   sql('source', `INSERT INTO "Conversation" (id,user_id,title,updated_at) SELECT 'restore-chat',id,'Kiểm thử khôi phục',now() FROM "User" ORDER BY id LIMIT 1; INSERT INTO "ChatMessage" (conversation_id,request_id,role,content) VALUES ('restore-chat','restore-request','user','Tài liệu tiếng Việt');`);
   pg('pg_dump', ['-Fc', '-d', 'source', '-f', path.join(dir, 'fixture.dump')]);
