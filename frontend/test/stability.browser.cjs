@@ -251,6 +251,34 @@ const assert = require("node:assert/strict");
       })
       .waitFor();
     await page.getByRole("button", { name: "Tiếp tục thanh toán" }).waitFor();
+    // An expired order must not keep offering a bank QR or payment action.
+    await page.route('**/api/payment/sepay/create', route => route.fulfill({ json: {
+      orderId: 'EXPIRED_UI', amount: 79000, bankCode: 'TEST', accountNumber: '000000', accountName: 'TEST',
+      transferContent: 'EXPIRED_UI', qrUrl: 'https://example.invalid/qr.png', expiresAt: new Date(Date.now() - 1000).toISOString(),
+    } }));
+    await page.route('**/api/payment/sepay/status/*', route => route.fulfill({ json: { orderId: 'EXPIRED_UI', status: 'EXPIRED' } }));
+    await page.getByRole('button', { name: 'Tiếp tục thanh toán' }).click();
+    await page.getByRole('button', { name: 'Chọn gói khác', exact: true }).waitFor();
+    assert.equal(await page.getByRole('img', { name: 'QR thanh toán', exact: true }).count(), 0);
+    assert(await page.getByRole('button', { name: 'Tôi đã chuyển khoản', exact: true }).isDisabled());
+
+    // Forgot-password must keep the form visible until SMTP acceptance, and
+    // surface a delivery failure instead of showing the success screen.
+    let pendingMail;
+    await page.route('**/api/auth/forgot-password', route => { pendingMail = route; });
+    await page.goto(base + '/forgot-password');
+    await page.locator('input[type="email"]').fill('reader@example.test');
+    await page.getByRole('button', { name: /Gửi link đặt lại/ }).click();
+    for (let i = 0; !pendingMail && i < 100; i++) await page.waitForTimeout(20);
+    assert(pendingMail);
+    assert.equal(await page.getByRole('heading', { name: 'Kiểm tra email!', exact: true }).count(), 0);
+    const failure = 'Chưa thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau.';
+    await pendingMail.fulfill({ status: 503, json: { message: failure } });
+    await page.getByText(failure, { exact: true }).waitFor();
+    await page.route('**/api/auth/forgot-password', route => route.fulfill({ json: { message: 'Đã tiếp nhận yêu cầu.' } }));
+    await page.getByRole('button', { name: /Gửi link đặt lại/ }).click();
+    await page.getByRole('heading', { name: 'Kiểm tra email!', exact: true }).waitFor();
+    console.log('PASS expired payment hides QR, and password recovery waits for delivery and surfaces SMTP failure');
     const failedPage = await browser.newPage();
     await failedPage.route("**/assets/Support-*.js", (route) =>
       route.abort("failed"),

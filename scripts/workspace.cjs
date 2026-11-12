@@ -4,7 +4,9 @@ const root = path.resolve(__dirname, '..');
 const children = new Set();
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 function start(command, args, cwd = root, env = process.env) {
-  const child = spawn(command, args, { cwd, env, stdio: 'inherit', detached: process.platform !== 'win32', shell: process.platform === 'win32' });
+  // Only Windows batch entrypoints need a shell. Native executables must be
+  // launched directly so paths such as "D:\\node js\\node.exe" remain intact.
+  const child = spawn(command, args, { cwd, env, stdio: 'inherit', detached: process.platform !== 'win32', shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(command) });
   children.add(child);
   child.once('exit', () => children.delete(child));
   return child;

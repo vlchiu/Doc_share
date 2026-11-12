@@ -83,8 +83,8 @@ const createMomoPayment = async (req, res) => {
 
     res.json({ payUrl: momoRes.payUrl, orderId });
   } catch (error) {
-    console.error('MoMo error:', error);
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    console.error('MoMo error:', error.code || error.name);
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -111,7 +111,7 @@ const momoIPN = async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: payment.user_id }, select: { email: true, name: true } });
     sendVIPConfirmEmail(user.email, user.name, payment.plan_months, updatedUser.plan_expires_at).catch(() => {});
   } catch (error) {
-    console.error('MoMo IPN error:', error);
+    console.error('MoMo IPN error:', error.code || error.name);
   }
 };
 
@@ -174,8 +174,8 @@ const createVNPayPayment = async (req, res) => {
 
     res.json({ payUrl, orderId });
   } catch (error) {
-    console.error('VNPay error:', error);
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    console.error('VNPay error:', error.code || error.name);
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -216,7 +216,7 @@ const vnpayReturn = async (req, res) => {
 
     res.redirect(`${process.env.FRONTEND_URL}/payment/result?status=success`);
   } catch (error) {
-    console.error('VNPay return error:', error);
+    console.error('VNPay return error:', error.code || error.name);
     res.redirect(`${process.env.FRONTEND_URL}/payment/result?status=failed`);
   }
 };
@@ -224,11 +224,16 @@ const vnpayReturn = async (req, res) => {
 // ─── Lấy lịch sử thanh toán ──────────────────────────────────────────────────
 const getPaymentHistory = async (req, res) => {
   try {
+    const { expiresAt, expired } = require('../utils/paymentExpiry');
     const payments = await prisma.payment.findMany({
       where: { user_id: req.user.userId },
       orderBy: { created_at: 'desc' }
     });
-    res.json(payments);
+    res.json(payments.map(payment => payment.provider === 'SEPAY' ? {
+      ...payment,
+      status: payment.status === 'PENDING' && expired(payment) ? 'EXPIRED' : payment.status,
+      expiresAt: expiresAt(payment).toISOString(),
+    } : payment));
   } catch (error) {
     res.status(500).json({ message: "Lỗi server" });
   }

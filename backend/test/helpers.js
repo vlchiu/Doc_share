@@ -15,9 +15,9 @@ function loader(mocks = {}, env = {}) {
     const customRequire = name => {
       if (Object.hasOwn(mocks, name)) return mocks[name];
       const resolved = realRequire.resolve(name);
-      const relative = path.relative(root, resolved);
+      const relative = path.relative(root, resolved).split(path.sep).join('/');
       if (Object.hasOwn(mocks, relative)) return mocks[relative];
-      if (resolved.startsWith(root + path.sep) && !resolved.includes('/node_modules/') && resolved.endsWith('.js')) return load(relative);
+      if (resolved.startsWith(root + path.sep) && !relative.split('/').includes('node_modules') && resolved.endsWith('.js')) return load(relative);
       return realRequire(name);
     };
     const context = { require: customRequire, module, exports: module.exports, __dirname: path.dirname(filename),

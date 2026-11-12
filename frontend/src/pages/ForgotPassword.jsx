@@ -14,8 +14,8 @@ function ForgotPassword() {
     try {
       await axiosClient.post('/auth/forgot-password', { email });
       setSent(true);
-    } catch {
-      toast.error('Có lỗi xảy ra, vui lòng thử lại.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại.');
     } finally { setLoading(false); }
   };
 
@@ -28,6 +28,9 @@ function ForgotPassword() {
             <h2 style={{ color: '#1a1a1a', margin: '16px 0 8px' }}>Kiểm tra email!</h2>
             <p style={{ color: '#64748b', lineHeight: 1.6 }}>
               Nếu email <strong>{email}</strong> tồn tại trong hệ thống, chúng tôi đã gửi link đặt lại mật khẩu. Link có hiệu lực trong <strong>1 giờ</strong>.
+            </p>
+            <p style={{ color: '#64748b', lineHeight: 1.6 }}>
+              Kiểm tra cả thư rác và mục Quảng cáo. Tài khoản Google đã xác minh cũng có thể dùng link này để tạo mật khẩu riêng.
             </p>
             <Link to="/login" style={{ display: 'inline-block', marginTop: '20px', color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none' }}>
               ← Quay lại đăng nhập

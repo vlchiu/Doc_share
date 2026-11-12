@@ -64,6 +64,7 @@ app.use('/api/follow', followRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/web-search', require('./routes/webSearchRoutes'));
+app.use(require('./middleware/errorHandler'));
 
 require('./jobs/cleanupRegistrations').startRegistrationCleanup();
 

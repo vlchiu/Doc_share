@@ -34,7 +34,7 @@ const reportDocument = async (req, res) => {
 
     res.status(201).json({ message: "Đã gửi báo cáo. Chúng tôi sẽ xem xét sớm!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -91,8 +91,8 @@ const resolveReport = async (req, res) => {
 
     res.json({ message: "Đã xử lý báo cáo!", action });
   } catch (error) {
-    console.error('resolveReport error:', error);
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    console.error('resolveReport error:', error.code || error.name);
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 

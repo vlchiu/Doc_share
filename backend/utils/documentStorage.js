@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { cloudinary } = require('../middleware/uploadMiddleware');
 
 function cloudAsset(fileUrl) {
@@ -40,6 +41,10 @@ function sourceForDocument(doc) {
 async function deleteStoredFile(fileUrl) {
   const asset = cloudAsset(fileUrl);
   if (asset) return cloudinary.uploader.destroy(asset.publicId, { resource_type: asset.resource_type, type: asset.type, invalidate: true });
+  if (typeof fileUrl === 'string' && fileUrl.startsWith('/uploads/')) {
+    const source = sourceForDocument({ file_url: fileUrl });
+    await fs.promises.unlink(source.path).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  }
 }
 
 module.exports = { cloudAsset, sourceForDocument, deleteStoredFile };

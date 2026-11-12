@@ -2,6 +2,9 @@ const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 20000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -10,9 +13,18 @@ const transporter = nodemailer.createTransport({
 
 const FROM_EMAIL = `"DocShare" <${process.env.EMAIL_USER}>`;
 
+async function sendMail(message) {
+  const result = await transporter.sendMail(message);
+  const recipient = message.to.toLowerCase();
+  if (!result?.accepted?.some(address => String(address).toLowerCase() === recipient)) {
+    throw Object.assign(new Error('Mail recipient not accepted'), { code: 'MAIL_NOT_ACCEPTED' });
+  }
+  return result;
+}
+
 // ── Gửi OTP xác thực đăng ký ──────────────────────────────────────────────────
 const sendVerifyEmail = async (toEmail, name, otp) => {
-  await transporter.sendMail({
+  await sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: 'Ma xac thuc dang ky DocShare',
@@ -43,7 +55,7 @@ const sendVerifyEmail = async (toEmail, name, otp) => {
 // ── Gửi link reset mật khẩu ───────────────────────────────────────────────────
 const sendResetPasswordEmail = async (toEmail, name, token) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-  await transporter.sendMail({
+  await sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: 'Dat lai mat khau DocShare',
@@ -72,7 +84,7 @@ const sendResetPasswordEmail = async (toEmail, name, token) => {
 
 // ── Gửi xác nhận kích hoạt VIP ────────────────────────────────────────────────
 const sendVIPConfirmEmail = async (toEmail, name, planMonths, expiresAt) => {
-  await transporter.sendMail({
+  await sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: 'Tai khoan VIP da duoc kich hoat - DocShare',

@@ -3,6 +3,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const prisma = require('../db');
 
 // Cấu hình Google Strategy
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL) {
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -65,10 +66,11 @@ passport.use(new GoogleStrategy({
     }
     return done(null, user);
   } catch (error) {
-    console.error('Google Strategy error:', error);
+    console.error('Google Strategy error:', error.code || error.name);
     return done(error, null);
   }
 }));
+}
 
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {

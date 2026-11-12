@@ -1,5 +1,11 @@
 # DocShare — trạng thái để tiếp tục sau khi reset ngữ cảnh
 
+## Sửa các lỗi sau clone — 11/11/2026
+
+Theo yêu cầu người dùng sửa lần lượt: quên mật khẩu cho tài khoản Google verified chưa có local password; chờ SMTP acceptance và xử lý gửi lỗi/thu hồi token; dọn file upload dù quota tắt, xử lý mất kết nối/commit và file dùng chung; danh mục có tài liệu trong thùng rác; lỗi API/provider không lộ chi tiết; OAuth optional khi thiếu cấu hình; SePay hết hạn sau30 phút và giữ receipt chuyển muộn để đối soát. Không có migration mới. Chi tiết/giới hạn ở CLONE_READINESS.md mục11/11 và LOCAL_TESTING.md.
+
+Đã gửi đúng một thư reset thật tới tài khoản do người dùng chỉ định; Gmail chấp nhận, chưa xác nhận Inbox. Không tự đổi mật khẩu thật. Không ghi khóa/token/email vào bàn giao. Giữ thay đổi chưa commit từ các lượt trước, giữ trạng thái tracked của backup/frontend env theo quyết định trước. Chưa push/deploy; chưa quét file thừa cũ hoặc chuyển khoản thật. Các test mới dùng SMTP/DB/storage/payment mock, ngoại trừ thư reset thử được người dùng yêu cầu.
+
 Cập nhật: 30/10/2026 (Asia/Ho_Chi_Minh).
 
 ## Yêu cầu và trạng thái

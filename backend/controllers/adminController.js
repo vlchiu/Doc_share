@@ -34,7 +34,7 @@ const getAllUsers = async (req, res) => {
 
     res.json({ users, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -59,7 +59,7 @@ const toggleUserActive = async (req, res) => {
 
     res.json({ message: updated.is_active ? "Đã mở khóa tài khoản" : "Đã khóa tài khoản", user: updated });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -83,7 +83,7 @@ const changeUserRole = async (req, res) => {
 
     res.json({ message: "Đã cập nhật role", user: updated });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -129,7 +129,7 @@ const getStats = async (req, res) => {
 
     res.json({ totalUsers, totalDocs, pendingDocs, totalComments, topDocs, chartData });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -191,8 +191,8 @@ const getAiModeratedDocs = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('getAiModeratedDocs error:', error);
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
+    console.error('getAiModeratedDocs error:', error.code || error.name);
+    res.status(500).json({ message: 'Lỗi server' });
   }
 };
 

@@ -2,6 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loader, response, database } = require('./helpers');
 const env = { SEPAY_WEBHOOK_KEY: 'test-key', SEPAY_ACCOUNT_NUMBER: '000123', SEPAY_ACCOUNT_NAME: 'TEST ACCOUNT', SEPAY_BANK_CODE: 'TEST' };
+test('SePay expiry is exactly 30 minutes, including the boundary', () => {
+  const expiry = require('../utils/paymentExpiry');
+  const payment = { created_at: new Date('2026-11-11T00:00:00Z') };
+  assert.equal(expiry.expiresAt(payment).toISOString(), '2026-11-11T00:30:00.000Z');
+  assert.equal(expiry.expired(payment, new Date('2026-11-11T00:29:59.999Z')), false);
+  assert.equal(expiry.expired(payment, new Date('2026-11-11T00:30:00Z')), true);
+});
 function setup(overrides = {}) {
   const db = database({ user: [{ id: 1, email: 'test@example.invalid', name: 'Test', is_active: true, plan: 'FREE' }] });
   const emails = [];
@@ -21,6 +28,40 @@ function setup(overrides = {}) {
   const event = (order, extra = {}) => ({ id: 123, transferType: 'in', accountNumber: env.SEPAY_ACCOUNT_NUMBER, transferAmount: order.amount, content: order.transferContent, ...extra });
   return { db, controller, create, webhook, event, emails };
 }
+
+test('late transfer expires the order and records a receipt for reconciliation, without granting VIP', async () => {
+  const ctx = setup(); const { data: order } = await ctx.create();
+  assert(new Date(order.expiresAt) > new Date());
+  await ctx.db.payment.update({ where: { order_id: order.orderId }, data: { created_at: new Date(Date.now() - 31 * 60000) } });
+  const event = ctx.event(order);
+  await ctx.webhook(event); await ctx.webhook(event);
+  const state = ctx.db.snapshot();
+  assert.equal(state.payment[0].status, 'EXPIRED');
+  assert.equal(state.user[0].plan, 'FREE');
+  assert.equal(state.sepayReceipt.length, 1);
+  assert.equal(state.sepayReceipt[0].reason, 'ORDER_EXPIRED');
+  assert.equal(ctx.emails.length, 0);
+});
+test('owner status polling expires pending orders but never changes successful payments', async () => {
+  for (const status of ['PENDING', 'SUCCESS']) {
+    const ctx = setup(); const { data: order } = await ctx.create();
+    await ctx.db.payment.update({ where: { order_id: order.orderId }, data: { status, created_at: new Date(Date.now() - 31 * 60000) } });
+    const res = response();
+    await ctx.controller.checkPaymentStatus({ params: { orderId: order.orderId }, user: { userId: 1 } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.data.status, status === 'PENDING' ? 'EXPIRED' : 'SUCCESS');
+    assert.equal(ctx.db.snapshot().payment[0].status, res.data.status);
+  }
+});
+test('polling returns a concurrent successful webhook result instead of a stale expiry', async () => {
+  const ctx = setup(); const { data: order } = await ctx.create();
+  await ctx.db.payment.update({ where: { order_id: order.orderId }, data: { created_at: new Date(Date.now() - 31 * 60000) } });
+  const original = ctx.db.payment.updateMany.bind(ctx.db.payment);
+  ctx.db.payment.updateMany = async () => original({ where: { order_id: order.orderId }, data: { status: 'SUCCESS' } });
+  const res = response();
+  await ctx.controller.checkPaymentStatus({ params: { orderId: order.orderId }, user: { userId: 1 } }, res);
+  assert.equal(res.data.status, 'SUCCESS');
+});
 
 test('SePay QR uses server prices for all plans and ignores client amount, account and owner', async () => {
   const ctx = setup();

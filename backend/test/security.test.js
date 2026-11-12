@@ -5,8 +5,8 @@ const { loader, response, database } = require('./helpers');
 const bcrypt = require('bcryptjs');
 const mail = { sendVerifyEmail: async () => {}, sendResetPasswordEmail: async () => {}, sendVIPConfirmEmail: async () => {} };
 const account = { id: 1, name: 'Test', email: 'test@example.invalid', role: 'USER', is_active: true, is_email_verified: true, token_version: 1, plan: 'FREE', monthly_downloads: 0 };
-const env = { SEPAY_WEBHOOK_KEY: 'fake-webhook-key', SEPAY_ACCOUNT_NUMBER: '123456', SEPAY_BANK_CODE: 'TEST', SEPAY_ACCOUNT_NAME: 'TEST' };
-const order = { id: 1, order_id: 'SEPAYABCDEF0123456789ABCDEF01', user_id: 1, plan_months: 1, provider: 'SEPAY', amount: 29000, status: 'PENDING' };
+const env = { GOOGLE_CLIENT_ID: 'test-client', GOOGLE_CLIENT_SECRET: 'test-secret', GOOGLE_CALLBACK_URL: 'http://localhost/callback', SEPAY_WEBHOOK_KEY: 'fake-webhook-key', SEPAY_ACCOUNT_NUMBER: '123456', SEPAY_BANK_CODE: 'TEST', SEPAY_ACCOUNT_NAME: 'TEST' };
+const order = { id: 1, order_id: 'SEPAYABCDEF0123456789ABCDEF01', user_id: 1, plan_months: 1, provider: 'SEPAY', amount: 29000, status: 'PENDING', created_at: new Date() };
 const event = { id: 100, transferAmount: 29000, transferType: 'in', accountNumber: '123456', content: order.order_id };
 function setup(seed = {}, extraMocks = {}) {
   const db = database({ user: [account], payment: [order], ...seed });

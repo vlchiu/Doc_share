@@ -81,7 +81,7 @@ test('resending to an existing pending account rechecks domain before sending', 
 
 test('OTP recipient is the registering address, not the configured sender', async () => {
   let envelope;
-  const load = loader({ nodemailer: { createTransport: () => ({ sendMail: async data => { envelope = data; } }) } }, { EMAIL_USER: 'admin@example.invalid' });
+  const load = loader({ nodemailer: { createTransport: () => ({ sendMail: async data => { envelope = data; return { accepted: [data.to] }; } }) } }, { EMAIL_USER: 'admin@example.invalid' });
   await load('utils/emailService.js').sendVerifyEmail('diachu@pro.vip', 'Test', '123456');
   assert.equal(envelope.to, 'diachu@pro.vip');
   assert.equal(envelope.cc, undefined);

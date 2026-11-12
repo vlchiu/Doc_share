@@ -4,6 +4,12 @@ const crypto = require('crypto');
 const { issueToken } = require('../utils/session');
 
 const router = express.Router();
+router.use(['/google', '/google/callback'], (req, res, next) => {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
+    return res.status(503).json({ message: 'Đăng nhập Google chưa được cấu hình. Vui lòng dùng email và mật khẩu.' });
+  }
+  next();
+});
 
 // Bước 1: Redirect sang Google — luôn hiện màn hình chọn tài khoản
 const cookieOptions = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/api/auth/google' };
@@ -24,7 +30,7 @@ router.get('/google/callback', (req, res, next) => {
   }
   passport.authenticate('google', { session: false }, (err, user) => {
     if (err || !user) {
-      console.error('Google auth error:', err?.message || 'No user returned');
+      console.error('Google auth error:', err?.code || err?.name || 'No user returned');
       return res.redirect(`${process.env.FRONTEND_URL}/login?error=google_failed`);
     }
 
@@ -34,7 +40,7 @@ router.get('/google/callback', (req, res, next) => {
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.redirect(`${process.env.FRONTEND_URL}/auth/google/success#token=${encodeURIComponent(token)}&userId=${user.id}`);
     } catch (e) {
-      console.error('JWT sign error:', e.message);
+      console.error('JWT sign error:', e.code || e.name);
       res.redirect(`${process.env.FRONTEND_URL}/login?error=google_failed`);
     }
   })(req, res, next);

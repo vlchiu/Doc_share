@@ -23,7 +23,7 @@ async function parsePdfBuffer(buffer) {
       return (typeof res === 'object' ? res?.text : res) || '';
     }
   } catch (err) {
-    console.error('Lỗi phân tích PDF:', err.message);
+    console.error('Lỗi phân tích PDF:', err.code || err.name);
   }
   return '';
 }
@@ -55,7 +55,7 @@ async function getFileBuffer(fileUrl, signal) {
     });
     return Buffer.from(response.data);
   } catch (err) {
-    console.error('Lỗi tải file:', err.message);
+    console.error('Lỗi tải file:', err.code || err.name);
     return null;
   }
 }
@@ -90,7 +90,7 @@ async function extractDocumentText(doc, signal) {
       }
     }
   } catch (err) {
-    console.error('Extract text error:', err.message);
+    console.error('Extract text error:', err.code || err.name);
   }
 
   // Giới hạn độ dài để tối ưu payload (30.000 ký tự)
@@ -155,7 +155,7 @@ async function callGemini(systemPrompt, history, userMessage, signal) {
       const reply = result.response.text();
       if (reply) return { reply, modelUsed: modelName };
     } catch (err) {
-      console.warn(`Gemini model ${modelName} thất bại:`, err.message);
+      console.warn(`Gemini model ${modelName} thất bại:`, err.code || err.name);
       lastError = err;
     }
   }
@@ -269,7 +269,7 @@ async function fetchLiveWeather(query, signal) {
 - Tốc độ gió: ${c.wind_speed_10m} km/h
 - Lượng mưa hiện tại: ${c.precipitation} mm`;
   } catch (err) {
-    console.error('Lỗi lấy dữ liệu thời tiết:', err.message);
+    console.error('Lỗi lấy dữ liệu thời tiết:', err.code || err.name);
     return null;
   }
 }
@@ -390,7 +390,7 @@ NGUYÊN TẮC TRẢ LỜI:
       try {
         result = await callGemini(systemPrompt, history, message.trim(), req.signal);
       } catch (geminiErr) {
-        console.error('Lỗi Gemini Copilot:', geminiErr.message);
+        console.error('Lỗi Gemini Copilot:', geminiErr.code || geminiErr.name);
       }
     }
 
@@ -400,7 +400,7 @@ NGUYÊN TẮC TRẢ LỜI:
       try {
         result = await callGroq(systemPrompt, history, message.trim(), req.signal);
       } catch (groqErr) {
-        console.error('Lỗi Groq Copilot:', groqErr.message);
+        console.error('Lỗi Groq Copilot:', groqErr.code || groqErr.name);
       }
     }
 
@@ -416,7 +416,7 @@ NGUYÊN TẮC TRẢ LỜI:
       docTitle: doc.title
     });
   } catch (error) {
-    console.error('Chat error:', error);
+    console.error('Chat error:', error.code || error.name);
     res.status(500).json({
       message: 'Lỗi máy chủ khi xử lý câu hỏi AI. Vui lòng thử lại sau.'
     });
@@ -462,13 +462,13 @@ NGUYÊN TẮC:
 
     if (process.env.GEMINI_API_KEY) {
       try { result = await callGemini(systemPrompt, history, message.trim(), req.signal); }
-      catch (e) { console.error('Gemini general error:', e.message); }
+      catch (e) { console.error('Gemini general error:', e.code || e.name); }
     }
 
     req.signal?.throwIfAborted();
     if (!result && process.env.GROQ_API_KEY) {
       try { result = await callGroq(systemPrompt, history, message.trim(), req.signal); }
-      catch (e) { console.error('Groq general error:', e.message); }
+      catch (e) { console.error('Groq general error:', e.code || e.name); }
     }
 
     if (!result) {
@@ -477,7 +477,7 @@ NGUYÊN TẮC:
 
     res.json({ reply: result.reply, modelUsed: result.modelUsed });
   } catch (error) {
-    console.error('General chat error:', error);
+    console.error('General chat error:', error.code || error.name);
     res.status(500).json({ message: 'Lỗi server. Vui lòng thử lại sau.' });
   }
 };

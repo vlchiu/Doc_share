@@ -53,7 +53,7 @@ const register = async (req, res) => {
       email
     });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -81,7 +81,7 @@ const verifyEmail = async (req, res) => {
 
     res.json({ message: "Xác thực thành công! Bạn có thể đăng nhập." });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -115,7 +115,7 @@ const resendVerifyEmail = async (req, res) => {
     }
     res.json({ message: "Đã gửi lại mã OTP!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -123,12 +123,13 @@ const resendVerifyEmail = async (req, res) => {
 const forgotPassword = async (req, res) => {
   try {
     const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
-    if (!email) return res.status(400).json({ message: 'Email không hợp lệ.' });
-    if (!email) return res.status(400).json({ message: "Vui lòng nhập email" });
+    if (!validEmail(email)) return res.status(400).json({ message: 'Email không hợp lệ.' });
 
     const user = await prisma.user.findUnique({ where: { email } });
     // Luôn trả về thành công để tránh lộ thông tin email tồn tại
-    if (!user || !user.is_active || !user.password) {
+    // Verified Google users can establish a local password through ownership
+    // of their verified mailbox. Never grant this to unverified registrations.
+    if (!user || !user.is_active || (!user.password && !user.is_email_verified)) {
       return res.json({ message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu." });
     }
 
@@ -140,12 +141,20 @@ const forgotPassword = async (req, res) => {
       data: { reset_token: hashSecret(resetToken), reset_token_expires: resetExpires }
     });
 
-    sendResetPasswordEmail(email, user.name, resetToken).catch(err =>
-      console.error('Send reset email error:', err.message)
-    );
+    try {
+      await sendResetPasswordEmail(email, user.name, resetToken);
+    } catch (error) {
+      // Do not leave an undelivered link active or invalidate a newer request.
+      await prisma.user.updateMany({
+        where: { id: user.id, reset_token: hashSecret(resetToken) },
+        data: { reset_token: null, reset_token_expires: null },
+      });
+      console.error('Password reset delivery failed:', error.code || error.name);
+      return res.status(503).json({ message: 'Chưa thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau.' });
+    }
     res.json({ message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu." });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -176,7 +185,7 @@ const resetPassword = async (req, res) => {
 
     res.json({ message: "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập." });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -212,7 +221,7 @@ const login = async (req, res) => {
       user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan }
     });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 // [GET] Lấy thông tin người dùng hiện tại
@@ -268,7 +277,7 @@ const updateProfile = async (req, res) => {
 
     res.json({ message: "Cập nhật thành công!", user: updatedUser });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi cập nhật", error: error.message });
+    res.status(500).json({ message: "Lỗi cập nhật" });
   }
 };
 
@@ -296,7 +305,7 @@ const changePassword = async (req, res) => {
 
     res.json({ message: "Đổi mật khẩu thành công!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -313,7 +322,7 @@ const adminResetPassword = async (req, res) => {
     await prisma.user.update({ where: { id: parseInt(id) }, data: { password: hashed, token_version: { increment: 1 }, reset_token: null, reset_token_expires: null } });
     res.json({ message: "Đã reset mật khẩu thành công!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 

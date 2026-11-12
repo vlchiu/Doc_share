@@ -15,6 +15,22 @@ Setup cài dependency hai ứng dụng và generate Prisma Client; không tự m
 
 ## Chạy local
 
+### Cấu hình bản clone mới
+
+- Sao chép `backend/.env.example` sang `backend/.env` nếu chưa có; không ghi đè cấu hình đang dùng. Điền database, JWT secret ngẫu nhiên riêng, Google OAuth, Cloudinary và Gmail. Điền Tavily/Gemini để bật Web Search, SePay để bật thanh toán.
+- Gmail hiện dùng SMTP: `EMAIL_USER` là tài khoản gửi, `EMAIL_PASS` phải là thông tin xác thực được Gmail chấp nhận. Nếu xác thực trả `EAUTH/535`, kiểm tra tài khoản và App Password; thay đổi trong `.env`, không gửi khóa vào chat và khởi động lại backend. Không bỏ qua OTP để che lỗi gửi mail.
+- Google OAuth hiện được khởi tạo khi backend khởi động: cần client ID/secret hợp lệ; callback local đăng ký trong Google Console là `http://localhost:5000/api/auth/google/callback` (đổi cổng nếu PORT khác).
+- Nếu dùng **database mới do bạn tạo**, sau `npm run setup`, chạy `npx prisma migrate deploy` trực tiếp trong thư mục backend. Không dùng migrate reset/db push để thay thế trên database có dữ liệu. Repo chưa có seed tự động: cần tạo tài khoản qua đăng ký, gán ADMIN bằng quy trình quản trị database của chủ dự án rồi tạo danh mục trong trang quản trị. Không tự áp dụng lên database dùng chung.
+- Nếu database hiện có đã đủ migration, không cần migrate hoặc tạo lại dữ liệu. MoMo/VNPay đang bị tắt; Groq chỉ là fallback tùy chọn.
+- `npm run test:database` hiện yêu cầu Linux/PostgreSQL binaries; trên Windows dùng môi trường Linux phù hợp. Các backend unit/API tests chạy được trực tiếp trên Windows.
+
+### Sau bản sửa ngày 11/11/2026
+
+- Quên mật khẩu hỗ trợ tài khoản Google đã xác minh để tạo mật khẩu riêng. Trang chỉ báo hoàn tất sau khi SMTP chấp nhận thư; kiểm tra Spam/Quảng cáo nếu chưa thấy. SMTP acceptance không chứng minh thư đã vào Inbox.
+- Khởi động lại backend để tải mã mới (`Ctrl+C`, rồi `npm run dev` từ root). Link reset có hiệu lực một giờ; tạo yêu cầu mới thay thế link cũ.
+- SePay: mỗi đơn có hiệu lực 30 phút. Khi hết hạn, tạo đơn mới trước khi chuyển khoản; giao dịch đến muộn cần đối soát qua receipt, không tự cấp VIP/hoàn tiền. Không cần migration mới cho thay đổi này.
+- Cleanup file mới hoạt động cả khi quota tắt. Bản sửa không tự quét hoặc xóa các file thừa từ các lần upload trước đây.
+
 ```bash
 npm run dev
 ```

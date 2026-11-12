@@ -38,18 +38,7 @@ router.post('/upload', verifyToken, require('../middleware/storageQuota').cleanu
 
 // ── Error handler cho multer (v2 dùng next(err) thay vì throw) ───────────────
 // eslint-disable-next-line no-unused-vars
-router.use('/upload', (err, req, res, next) => {
-  if (err && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ message: 'File quá lớn! Giới hạn tối đa là 20MB.' });
-  }
-  if (err && err.code === 'LIMIT_UNEXPECTED_FILE') {
-    return res.status(400).json({ message: 'Tên field file không hợp lệ. Vui lòng dùng field "file".' });
-  }
-  if (err) {
-    return res.status(err.status || 400).json({ code: err.code, message: err.message || 'Lỗi khi tải file lên.' });
-  }
-  next();
-});
+router.use('/upload', require('../middleware/uploadError'));
 router.delete('/comments/:commentId', verifyToken, deleteComment);
 
 // --- AUTOCOMPLETE SUGGEST ---
@@ -101,9 +90,6 @@ router.post('/:id/comments', verifyToken, documentAccess(), addComment);
 router.post('/:id/rate', verifyToken, documentAccess(), rateDocument);
 router.post('/:id/report', verifyToken, documentAccess(), reportDocument);
 
-router.use((error, req, res, next) => {
-  if (error.status || error.code?.startsWith('LIMIT_')) return res.status(error.status || 400).json({ code: error.code, message: error.message });
-  next(error);
-});
+router.use(require('../middleware/uploadError'));
 
 module.exports = router;

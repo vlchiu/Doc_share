@@ -8,7 +8,7 @@ const getCategories = async (req, res) => {
     });
     res.status(200).json(categories);
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -24,7 +24,7 @@ const createCategory = async (req, res) => {
     const cat = await prisma.category.create({ data: { name: name.trim(), description: description?.trim() || null } });
     res.status(201).json(cat);
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -44,7 +44,7 @@ const updateCategory = async (req, res) => {
     });
     res.json(cat);
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -52,13 +52,14 @@ const deleteCategory = async (req, res) => {
   try {
     if (req.user.role !== 'ADMIN') return res.status(403).json({ message: "Không có quyền" });
     const { id } = req.params;
-    const count = await prisma.document.count({ where: { category_id: parseInt(id), deleted_at: null } });
-    if (count > 0) return res.status(400).json({ message: `Không thể xóa — danh mục đang có ${count} tài liệu` });
+    const count = await prisma.document.count({ where: { category_id: parseInt(id) } });
+    if (count > 0) return res.status(400).json({ message: `Không thể xóa — danh mục đang có ${count} tài liệu, bao gồm tài liệu trong thùng rác.` });
 
     await prisma.category.delete({ where: { id: parseInt(id) } });
     res.json({ message: "Đã xóa danh mục" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    if (error.code === 'P2003') return res.status(409).json({ message: 'Danh mục vẫn đang được tài liệu sử dụng. Vui lòng tải lại danh sách.' });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 

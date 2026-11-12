@@ -108,7 +108,7 @@ const uploadDocument = async (req, res) => {
             textContent = (resp.data || '').slice(0, 3000);
           }
         } catch (extractErr) {
-          console.warn('Text extraction skipped:', extractErr.message);
+          console.warn('Text extraction skipped:', extractErr.code || extractErr.name);
         }
 
         const modResult = await moderateDocument({
@@ -142,7 +142,7 @@ const uploadDocument = async (req, res) => {
           } }).catch(() => {});
         }
       } catch (err) {
-        console.error('AI moderation error:', err.message);
+        console.error('AI moderation error:', err.code || err.name);
       }
     })();
 
@@ -170,8 +170,8 @@ const uploadDocument = async (req, res) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: "File quá lớn! Giới hạn tối đa là 20MB." });
     }
-    console.error('uploadDocument error:', error);
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    console.error('uploadDocument error:', error.code || error.name);
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -355,12 +355,22 @@ const updateDocument = async (req, res) => {
       data: updateData
     }));
     if (!changed.count) return res.status(409).json({ message: 'Tài liệu đã thay đổi. Vui lòng tải lại trang.' });
-    if(file) await deleteCover(doc.thumbnail_url).catch(()=>{});
+    if (file) {
+      await deleteCover(doc.thumbnail_url).catch(() => {});
+      if (doc.file_url !== updateData.file_url) {
+        // Legacy documents can share an asset. Never remove a referenced file.
+        try {
+          if (!await prisma.document.count({ where: { file_url: doc.file_url } })) await deleteStoredFile(doc.file_url);
+        } catch (error) {
+          console.error('Replaced file cleanup needs reconciliation:', error.code || error.name);
+        }
+      }
+    }
     const updatedDoc = await prisma.document.findUnique({ where: { id: doc.id } });
 
     res.status(200).json({ message: "Cập nhật thành công!", document: publicDocument(updatedDoc) });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống khi cập nhật", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống khi cập nhật" });
   }
 };
 // [DELETE] Xóa tài liệu (soft delete — chuyển vào thùng rác)
@@ -386,7 +396,7 @@ const deleteDocument = async (req, res) => {
 
     res.json({ message: "Đã chuyển vào thùng rác!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống khi xóa", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống khi xóa" });
   }
 };
 
@@ -413,7 +423,7 @@ const restoreDocument = async (req, res) => {
 
     res.json({ message: "Đã khôi phục tài liệu!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -451,7 +461,7 @@ const permanentDeleteDocument = async (req, res) => {
 
     res.json({ message: "Đã xóa vĩnh viễn!" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống khi xóa", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống khi xóa" });
   }
 };
 
@@ -547,7 +557,7 @@ const addComment = async (req, res) => {
       }).catch(() => {});
     }
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -588,12 +598,12 @@ const approveDocument = async (req, res) => {
     // Gửi thông báo — không để lỗi này block response
     prisma.notification.create({
       data: { user_id: doc.user_id, content: `✅ Tài liệu "${doc.title}" của bạn đã được duyệt!`, link: `/documents/${id}` }
-    }).catch(err => console.error('Notification error:', err));
+    }).catch(err => console.error('Notification error:', err.code || err.name));
 
     res.json({ message: "Đã duyệt tài liệu!", document: publicDocument(updatedDoc) });
   } catch (error) {
-    console.error('approveDocument error:', error);
-    res.status(500).json({ message: "Lỗi khi duyệt", error: error.message });
+    console.error('approveDocument error:', error.code || error.name);
+    res.status(500).json({ message: "Lỗi khi duyệt" });
   }
 };
 
@@ -620,12 +630,12 @@ const rejectDocument = async (req, res) => {
 
     prisma.notification.create({
       data: { user_id: doc.user_id, content: `❌ Tài liệu "${doc.title}" bị từ chối. Lý do: ${reason.trim()}`, link: `/my-documents` }
-    }).catch(err => console.error('Notification error:', err));
+    }).catch(err => console.error('Notification error:', err.code || err.name));
 
     res.json({ message: "Đã từ chối tài liệu!", document: publicDocument(updatedDoc) });
   } catch (error) {
-    console.error('rejectDocument error:', error);
-    res.status(500).json({ message: "Lỗi khi từ chối", error: error.message });
+    console.error('rejectDocument error:', error.code || error.name);
+    res.status(500).json({ message: "Lỗi khi từ chối" });
   }
 };
 
@@ -656,7 +666,7 @@ const toggleSaveDocument = async (req, res) => {
       res.json({ message: "Đã lưu tài liệu", isSaved: true });
     }
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -703,7 +713,7 @@ const rateDocument = async (req, res) => {
 
     res.json({ avgScore: agg._avg.score, totalRatings: agg._count.score, userScore: parseInt(score) });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -813,7 +823,7 @@ const deleteComment = async (req, res) => {
     await prisma.comment.delete({ where: { id: parseInt(commentId) } });
     res.json({ message: "Đã xóa bình luận" });
   } catch (error) {
-    res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+    res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 

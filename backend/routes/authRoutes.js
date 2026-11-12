@@ -16,6 +16,7 @@ router.post('/reset-password', authLimit, resetPassword);
 router.get('/usage', verifyToken, require('../utils/accountQuota').usage);
 router.get('/me', verifyToken, getMe);
 router.put('/update-profile', verifyToken, upload.single('avatar'), updateProfile);
+router.use('/update-profile', require('../middleware/uploadError'));
 router.put('/change-password', verifyToken, authLimit, changePassword);
 router.put('/admin/reset-password/:id', verifyToken, authLimit, adminResetPassword);
 

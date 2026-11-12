@@ -77,9 +77,19 @@ function VIPUpgrade({ onVIPActivated }) {
     activation.current = onVIPActivated;
   }, [onVIPActivated]);
   const createRequest = useRef(null);
+  const [orderNow, setOrderNow] = useState(() => Date.now());
+  const orderEnded = sepayOrder && (
+    ['FAILED', 'CANCELLED', 'EXPIRED'].includes(sepayOrder.status) ||
+    (sepayOrder.expiresAt && new Date(sepayOrder.expiresAt).getTime() <= orderNow)
+  );
+  useEffect(() => {
+    if (!sepayOrder || ['FAILED', 'CANCELLED', 'EXPIRED'].includes(sepayOrder.status)) return;
+    const timer = setInterval(() => setOrderNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [sepayOrder]);
   useEffect(() => () => createRequest.current?.abort(), []);
   useEffect(() => {
-    if (!sepayOrder) return;
+    if (!sepayOrder || ['FAILED', 'CANCELLED', 'EXPIRED'].includes(sepayOrder.status)) return;
     const poller = createSequentialPoller({
       task: (signal) =>
         axiosClient.get(`/payment/sepay/status/${sepayOrder.orderId}`, {
@@ -98,6 +108,7 @@ function VIPUpgrade({ onVIPActivated }) {
           return false;
         }
         if (["FAILED", "CANCELLED", "EXPIRED"].includes(data.status)) {
+          setSepayOrder(previous => previous?.orderId === data.orderId ? { ...previous, status: data.status } : previous);
           setStatusError(
             "Đơn thanh toán đã kết thúc và chưa được xác nhận thành công. Vui lòng liên hệ hỗ trợ nếu bạn đã chuyển tiền.",
           );
@@ -138,6 +149,7 @@ function VIPUpgrade({ onVIPActivated }) {
       setCheckingStatus(false);
       setCopiedContent(false);
       setCopiedAccount(false);
+      setOrderNow(Date.now());
       setSepayOrder(res.data);
       setStatusError("");
     } catch (err) {
@@ -176,12 +188,12 @@ function VIPUpgrade({ onVIPActivated }) {
           animate={{ opacity: 1, scale: 1 }}
           className="rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-2xl p-6 sm:p-8 text-center space-y-6"
         >
-          {statusError && (
+          {(statusError || orderEnded) && (
             <p
               role="status"
               className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800"
             >
-              {statusError}
+              {statusError || 'Đơn đã hết hạn. Không chuyển tiền theo mã này. Nếu đã chuyển tiền, vui lòng liên hệ hỗ trợ để đối soát.'}
             </p>
           )}
           {/* Header */}
@@ -198,13 +210,16 @@ function VIPUpgrade({ onVIPActivated }) {
           </div>
 
           {/* QR Container */}
-          <div className="inline-block p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-inner">
+          {!orderEnded && <div className="inline-block p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-inner">
             <img
               src={sepayOrder.qrUrl}
               alt="QR thanh toán"
               className="w-56 h-56 rounded-xl mx-auto object-contain bg-white p-2 shadow-xs"
             />
-          </div>
+          </div>}
+          {sepayOrder.expiresAt && <p className="text-xs text-slate-500">
+            Hạn thanh toán: {new Date(sepayOrder.expiresAt).toLocaleString('vi-VN')} (30 phút từ lúc tạo đơn).
+          </p>}
 
           {/* Transfer Details Card */}
           <div className="rounded-2xl bg-slate-50/80 border border-slate-200/80 p-4 text-left text-xs space-y-2.5">
@@ -281,7 +296,7 @@ function VIPUpgrade({ onVIPActivated }) {
           <div className="flex gap-2">
             <button
               onClick={handleCheckManually}
-              disabled={checkingStatus}
+              disabled={checkingStatus || !!orderEnded}
               className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer border-0 shadow-md shadow-indigo-500/20 flex items-center justify-center gap-1.5"
             >
               {checkingStatus ? (
@@ -303,13 +318,13 @@ function VIPUpgrade({ onVIPActivated }) {
               }}
               className="px-4 py-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs transition-colors cursor-pointer"
             >
-              Hủy
+              {orderEnded ? 'Chọn gói khác' : 'Hủy'}
             </button>
           </div>
 
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Hệ thống tự động kiểm tra trạng thái thanh toán</span>
+            <span>{orderEnded ? 'Đơn đã kết thúc' : 'Hệ thống tự động kiểm tra trạng thái thanh toán'}</span>
           </div>
         </Motion.div>
       </div>

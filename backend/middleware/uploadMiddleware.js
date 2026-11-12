@@ -66,7 +66,7 @@ const fileFilter = (req, file, cb) => {
   if (ALLOWED_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`Loại file không được hỗ trợ: ${file.mimetype}`), false);
+    cb(Object.assign(new Error('Loại file không được hỗ trợ.'), { code: 'INVALID_FILE_TYPE' }), false);
   }
 };
 
@@ -77,5 +77,5 @@ module.exports.cloudinary = cloudinary;
 
 module.exports.avatarUpload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
   if (['image/jpeg', 'image/png', 'image/gif'].includes(file.mimetype)) cb(null, true);
-  else cb(new Error('Ảnh đại diện phải là JPG, PNG hoặc GIF.'));
+  else cb(Object.assign(new Error('Ảnh đại diện phải là JPG, PNG hoặc GIF.'), { code: 'INVALID_AVATAR_TYPE' }));
 } });

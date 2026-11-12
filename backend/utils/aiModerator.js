@@ -74,7 +74,7 @@ Hãy trả lời ĐÚNG theo định dạng JSON sau, KHÔNG có text thêm:
         };
       }
     } catch (err) {
-      console.warn(`AI Moderation model ${modelName} failed:`, err.message);
+      console.warn(`AI Moderation model ${modelName} failed:`, err.code || err.name);
     }
   }
 

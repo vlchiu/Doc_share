@@ -2,6 +2,7 @@ const prisma = require('../db');
 const crypto = require('crypto');
 const { serializable } = require('../utils/transaction');
 const { sendVIPConfirmEmail } = require('../utils/emailService');
+const { expiresAt, expired } = require('../utils/paymentExpiry');
 
 const VIP_PLANS = { 1: 29000, 3: 79000, 12: 249000 };
 
@@ -29,8 +30,9 @@ const createSepayPayment = async (req, res) => {
     if (!bankCode || !accountNumber || !accountName || !key) return res.status(503).json({ message: 'Thanh toán chưa được cấu hình đầy đủ.' });
     const orderId = `SEPAY${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
     const amount = VIP_PLANS[planMonths];
-    await prisma.payment.create({ data: { order_id: orderId, amount, plan_months: planMonths, provider: 'SEPAY', user_id: req.user.userId } });
-    res.json({ orderId, amount, bankCode, accountNumber, accountName, transferContent: orderId,
+    const createdAt = new Date();
+    await prisma.payment.create({ data: { order_id: orderId, amount, plan_months: planMonths, provider: 'SEPAY', user_id: req.user.userId, created_at: createdAt } });
+    res.json({ orderId, amount, bankCode, accountNumber, accountName, transferContent: orderId, expiresAt: expiresAt({ created_at: createdAt }).toISOString(),
       qrUrl: `https://img.vietqr.io/image/${encodeURIComponent(bankCode)}-${encodeURIComponent(accountNumber)}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(orderId)}&accountName=${encodeURIComponent(accountName)}` });
   } catch (error) {
     console.error('SePay create error:', error.code || error.name);
@@ -70,6 +72,10 @@ const sepayWebhook = async (req, res) => {
       // Also reject replay of transactions recorded by the pre-migration handler.
       if (await tx.payment.findFirst({ where: { provider: 'SEPAY', provider_ref: receiptId } })) return unmatched('TRANSACTION_ALREADY_USED');
       if (payment.status !== 'PENDING') return unmatched('ORDER_NOT_PENDING');
+      if (expired(payment)) {
+        await tx.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'EXPIRED' } });
+        return unmatched('ORDER_EXPIRED');
+      }
       if (payment.amount !== transferAmount) return unmatched('AMOUNT_MISMATCH');
       const user = await tx.user.findUnique({ where: { id: payment.user_id } });
       if (!user || !user.is_active) return unmatched('ACCOUNT_UNAVAILABLE');
@@ -103,10 +109,16 @@ const sepayWebhook = async (req, res) => {
 
 const checkPaymentStatus = async (req, res) => {
   try {
-    const payment = await prisma.payment.findFirst({ where: { order_id: req.params.orderId, user_id: req.user.userId, provider: 'SEPAY' } });
+    let payment = await prisma.payment.findFirst({ where: { order_id: req.params.orderId, user_id: req.user.userId, provider: 'SEPAY' } });
     if (!payment) return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
+    if (payment.status === 'PENDING' && expired(payment)) {
+      await prisma.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'EXPIRED' } });
+      // A concurrent webhook may have completed it. Return the persisted state.
+      payment = await prisma.payment.findUnique({ where: { id: payment.id } });
+      if (!payment) return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
+    }
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ orderId: payment.order_id, status: payment.status, amount: payment.amount, planMonths: payment.plan_months, createdAt: payment.created_at });
+    res.json({ orderId: payment.order_id, status: payment.status, amount: payment.amount, planMonths: payment.plan_months, createdAt: payment.created_at, expiresAt: expiresAt(payment).toISOString() });
   } catch {
     res.status(500).json({ message: 'Chưa thể kiểm tra đơn hàng.' });
   }

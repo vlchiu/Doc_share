@@ -241,7 +241,8 @@ const assert = require("node:assert/strict");
       .getByRole("button", { name: "Gửi câu hỏi", exact: true })
       .click();
     await page.getByText("Đang gửi · chưa lưu", { exact: true }).waitFor();
-    await page.getByText("Câu hỏi đang chờ", { exact: true }).waitFor();
+    // The conversation title may already contain the same text in the sidebar.
+    await page.getByRole("paragraph").filter({ hasText: /^Câu hỏi đang chờ$/ }).waitFor();
     for (let i = 0; !held && i < 100; i++) await page.waitForTimeout(20);
     assert.ok(held);
     await held.fallback();
