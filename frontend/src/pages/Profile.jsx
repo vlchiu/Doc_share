@@ -1,3 +1,4 @@
+import UserConnections from "../components/docshare/UserConnections";
 import UsagePanel from "../components/docshare/UsagePanel";
 import useRemoteData from "../hooks/useRemoteData";
 import { LoadingState, ErrorState } from "../components/docshare/ResourceState";
@@ -201,6 +202,7 @@ function Profile() {
           <p className="mt-5 text-sm text-[#60709b]">
             Quản lý hồ sơ và chia sẻ tri thức cùng cộng đồng DocShare.
           </p>
+          <UserConnections key={user.id} userId={user.id} ownProfile />
         </section>
         <nav
           className="flex flex-wrap gap-3 border-b border-blue-100 pb-3 text-sm"

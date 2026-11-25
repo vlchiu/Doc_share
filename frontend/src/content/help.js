@@ -5,11 +5,26 @@ export const guides = [
     to: "/collections",
     action: "Mở bộ sưu tập",
     steps: [
+      "Tab Của tôi chứa bộ sưu tập bạn tạo; tab Đang theo dõi chứa bộ công khai bạn đã theo dõi.",
       "Tạo bộ sưu tập, nhập tên và mô tả. Bộ sưu tập mới mặc định riêng tư.",
       "Bấm Thêm tài liệu để chọn từ tài liệu của tôi hoặc tài liệu đã lưu; cũng có thể thêm ngay trên trang chi tiết tài liệu.",
       "Tìm theo tên hoặc mô tả; xóa từ khóa tìm kiếm để dùng nút lên/xuống sắp xếp tài liệu.",
       "Đổi sang Công khai qua liên kết rồi sao chép liên kết để chia sẻ. Người xem chỉ thấy tài liệu họ có quyền đọc.",
+      "Bấm Theo dõi bộ sưu tập trên bộ công khai của người khác để mở lại trong tab Đang theo dõi. Theo dõi bộ không tự theo dõi chủ bộ và không cấp thêm quyền tài liệu.",
+      "Khi bộ chuyển riêng tư, chỉ hiện Bộ sưu tập không còn công khai và bạn vẫn có thể bỏ theo dõi; nếu chủ bộ công khai lại, bộ sẽ hiển thị trở lại. Bộ bị xóa tự biến mất khỏi danh sách.",
       "Bỏ tài liệu khỏi bộ sưu tập hoặc xóa bộ sưu tập không xóa tài liệu gốc và không bỏ lưu tài liệu.",
+    ],
+  },
+  {
+    id: "following",
+    title: "Người theo dõi và đang theo dõi",
+    to: "/profile",
+    action: "Mở hồ sơ",
+    steps: [
+      "Dưới thông tin hồ sơ, bấm Người theo dõi để xem ai đang theo dõi bạn; bấm Đang theo dõi để xem những người bạn theo dõi.",
+      "Mỗi dòng có ảnh, tên, liên kết hồ sơ và nút theo dõi lại hoặc bỏ theo dõi. Bạn không thể tự theo dõi chính mình.",
+      "Trên hồ sơ người khác, danh sách thuộc về người đó nhưng trạng thái và nút thao tác luôn theo tài khoản đang đăng nhập.",
+      "Theo dõi là quan hệ một chiều và độc lập với theo dõi bộ sưu tập. Chưa có thông báo cập nhật bộ sưu tập trong phiên bản này.",
     ],
   },
   {

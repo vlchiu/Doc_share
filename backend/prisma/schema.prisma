@@ -38,6 +38,7 @@ model User {
   reports              Report[]
   conversations        Conversation[]
   usage_reservations   UsageReservation[]
+  collection_follows   CollectionFollow[]
   collections          Collection[]
   saved_docs           SavedDocument[]
 }
@@ -244,6 +245,7 @@ model Collection {
   updated_at DateTime @updatedAt
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   items CollectionItem[]
+  followers CollectionFollow[]
   @@index([user_id, updated_at])
 }
 
@@ -256,4 +258,15 @@ model CollectionItem {
   @@id([collection_id, document_id])
   @@index([collection_id, position])
   @@index([document_id])
+}
+
+model CollectionFollow {
+  user_id Int
+  collection_id Int
+  created_at DateTime @default(now())
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  collection Collection @relation(fields: [collection_id], references: [id], onDelete: Cascade)
+  @@id([user_id, collection_id])
+  @@index([collection_id])
+  @@index([user_id, created_at])
 }

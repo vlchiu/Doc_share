@@ -1,0 +1,90 @@
+const assert = require('node:assert/strict');
+const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { loader } = require('./helpers');
+if (!process.env.TEST_DATABASE_URL) throw new Error('Temporary database required');
+const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.TEST_DATABASE_URL }) });
+const load = loader({ '../db': db });
+const users = load('controllers/followController.js');
+const collections = load('controllers/collectionController.js');
+async function call(controller, method, user, params = {}, body = {}) {
+  const res = { statusCode: 200, set() {}, setHeader() {}, status(code) { this.statusCode = code; return this; }, json(data) { this.data = data; } };
+  await controller[method]({ user, params, body, query: {} }, res);
+  return res;
+}
+(async () => {
+  const people = [];
+  for (let i = 0; i < 3; i++) people.push(await db.user.create({ data: { name: `Follow ${i}`, email: `follow-${i}@example.test`, is_email_verified: true } }));
+  const [a, b, c] = people.map(p => ({ userId: p.id, role: 'USER' }));
+  assert.equal((await call(users, 'follow', a, { userId: a.userId })).statusCode, 400);
+  assert.equal((await call(users, 'follow', a, { userId: '1oops' })).statusCode, 400);
+  assert.equal((await call(users, 'follow', a, { userId: 2147483647 })).statusCode, 404);
+  const repeated = await Promise.all(Array.from({ length: 4 }, () => call(users, 'follow', a, { userId: b.userId })));
+  assert.ok(repeated.every(r => r.statusCode === 200 && r.data.isFollowing));
+  assert.equal(await db.follow.count({ where: { follower_id: a.userId } }), 1);
+  assert.equal(await db.notification.count({ where: { user_id: b.userId } }), 1);
+  await call(users, 'follow', c, { userId: b.userId });
+  await call(users, 'follow', c, { userId: a.userId });
+  const followers = await call(users, 'getFollowers', a, { userId: b.userId });
+  assert.equal(followers.data.find(p => p.id === a.userId).isSelf, true);
+  assert.equal(followers.data.find(p => p.id === c.userId).isFollowing, false);
+  assert.ok(!JSON.stringify(followers.data).includes('email'));
+  const status = await call(users, 'getFollowStatus', a, { userId: a.userId });
+  assert.equal(status.data.followers, 1);
+  assert.equal(status.data.following, 1);
+  assert.equal(status.data.isSelf, true);
+  const mine = await call(users, 'getFollowing', a, { userId: a.userId });
+  assert.equal(mine.data[0].isFollowing, true);
+  const guest = await call(users, 'getFollowers', undefined, { userId: b.userId });
+  assert.ok(guest.data.every(p => !p.isFollowing && !p.isSelf));
+  await Promise.all(Array.from({ length: 3 }, () => call(users, 'unfollow', a, { userId: b.userId })));
+  assert.equal((await call(users, 'getFollowStatus', a, { userId: a.userId })).data.following, 0);
+  await call(users, 'toggleFollow', a, { userId: b.userId });
+  assert.equal((await call(users, 'toggleFollow', a, { userId: b.userId })).data.isFollowing, false);
+
+  const col = await db.collection.create({ data: { user_id: b.userId, name: 'Public follow fixture', description: 'Sensitive when private', visibility: 'PUBLIC' } });
+  const params = { id: col.id };
+  assert.equal((await call(collections, 'follow', b, params)).statusCode, 400);
+  const results = await Promise.all(Array.from({ length: 4 }, () => call(collections, 'follow', a, params)));
+  assert.ok(results.every(r => r.statusCode === 200));
+  assert.equal(await db.collectionFollow.count({ where: { collection_id: col.id } }), 1);
+  assert.equal((await call(collections, 'read', a, params)).data.is_following, true);
+  assert.equal((await call(collections, 'read', undefined, params)).data.is_following, false);
+  const followed = await call(collections, 'following', a);
+  assert.equal(followed.data[0].name, col.name);
+  assert.equal(followed.data[0].available, true);
+  assert.equal((await call(collections, 'following', c)).data.length, 0);
+  assert.equal(await db.follow.count({ where: { follower_id: a.userId, following_id: b.userId } }), 0, 'Collection follow never follows owner');
+  await call(collections, 'update', b, params, { name: col.name, description: col.description, visibility: 'PRIVATE' });
+  const hidden = await call(collections, 'following', a);
+  assert.equal(JSON.stringify(hidden.data), JSON.stringify([{ id: col.id, available: false }]));
+  assert.equal((await call(collections, 'read', a, params)).statusCode, 404);
+  assert.equal((await call(collections, 'follow', c, params)).statusCode, 404);
+  await call(collections, 'unfollow', a, params);
+  assert.equal((await call(collections, 'following', a)).data.length, 0);
+  await call(collections, 'update', b, params, { name: col.name, visibility: 'PUBLIC' });
+  await call(collections, 'follow', a, params);
+  await call(collections, 'remove', b, params);
+  assert.equal(await db.collectionFollow.count({ where: { collection_id: col.id } }), 0);
+  assert.equal((await call(collections, 'unfollow', a, params)).statusCode, 200);
+
+  // A private transition holds the same lock as follow: a waiting follow must see PRIVATE.
+  const race = await db.collection.create({ data: { user_id: b.userId, name: 'Race', visibility: 'PUBLIC' } });
+  let locked;
+  const ready = new Promise(resolve => { locked = resolve; });
+  const privacy = db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "Collection" WHERE id = ${race.id} FOR UPDATE`;
+    locked();
+    await new Promise(resolve => setTimeout(resolve, 80));
+    await tx.collection.update({ where: { id: race.id }, data: { visibility: 'PRIVATE' } });
+  });
+  await ready;
+  const attempted = call(collections, 'follow', a, { id: race.id });
+  await privacy;
+  assert.equal((await attempted).statusCode, 404);
+  assert.equal(await db.collectionFollow.count({ where: { collection_id: race.id } }), 0);
+  // Retain real collection/follow rows so the standard dump/restore test verifies their contents.
+  await db.collection.update({ where: { id: race.id }, data: { visibility: 'PUBLIC' } });
+  await call(collections, 'follow', a, { id: race.id });
+  console.log('PASS follows PostgreSQL: viewer-relative lists, counts, self/invalid prevention, concurrent idempotency, legacy toggle, private redaction, revoked access, independent follow types, cascade and privacy race.');
+})().finally(() => db.$disconnect()).catch(error => { console.error(error); process.exitCode = 1; });

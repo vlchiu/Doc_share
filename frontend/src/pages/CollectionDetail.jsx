@@ -133,8 +133,15 @@ function Detail(
     <div className='space-y-6' aria-busy={loading || busy}>
       <Link to='/collections' className='text-sm text-blue-600'>← Bộ sưu tập của tôi</Link>
       <div className='rounded-2xl border border-blue-100 bg-white p-6'><span className='text-sm text-blue-600'>{c.visibility === 'PUBLIC' ? 'Công khai qua liên kết' : 'Riêng tư'}</span><h1 className='my-3 break-words text-2xl font-bold'>{c.name}</h1><p className='whitespace-pre-wrap break-words text-slate-500'>{c.description}</p>
-        <p className='my-4 text-sm'>{c.items.length}tài liệu có thể xem. Mỗi tài liệu giữ nguyên quyền truy cập.</p>
-        <div className='flex flex-wrap gap-2'>{c.is_owner && <><button
+        <p className='my-4 text-sm'>{c.items.length} tài liệu có thể xem. Mỗi tài liệu giữ nguyên quyền truy cập.</p>
+        <div className='flex flex-wrap gap-2'>
+          {!c.is_owner && c.visibility === 'PUBLIC' && (localStorage.getItem('token') ? (
+            <button className='ds-button-primary' disabled={busy || loading} onClick={() => mutate(async () => {
+              const { data: result } = await axiosClient[c.is_following ? 'delete' : 'put'](`/collections/${id}/follow`);
+              toast.success(result.message);
+            })}>{c.is_following ? 'Bỏ theo dõi bộ sưu tập' : 'Theo dõi bộ sưu tập'}</button>
+          ) : <Link className='ds-button-outline' to='/login'>Đăng nhập để theo dõi bộ sưu tập</Link>)}
+          {c.is_owner && <><button
               disabled={busy || loading}
               className='ds-button-primary'
               onClick={() => setModal('add')}>Thêm tài liệu</button><button
@@ -171,7 +178,7 @@ function Detail(
               key={d.id}
               className='flex flex-wrap items-center justify-between gap-4 rounded-xl border border-blue-100 bg-white p-4'><div className='min-w-0 flex-1'><Link
                   className='break-words font-semibold text-blue-700'
-                  to={`/documents/${d.id}`}>{d.title}</Link><p className='mt-1 text-sm text-slate-500'>{d.user?.name}· {d.file_type}</p></div>{c.is_owner && <div className='flex flex-wrap gap-2'><button
+                  to={`/documents/${d.id}`}>{d.title}</Link><p className='mt-1 text-sm text-slate-500'>{d.user?.name} · {d.file_type}</p></div>{c.is_owner && <div className='flex flex-wrap gap-2'><button
                   className='ds-button-outline'
                   aria-label={`Đưa lên: ${d.title}`}
                   disabled={busy || loading || !!query || index === 0}

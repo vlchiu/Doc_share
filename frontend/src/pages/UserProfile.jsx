@@ -1,10 +1,7 @@
 import useRemoteData from "../hooks/useRemoteData";
 import { ErrorState } from "../components/docshare/ResourceState";
-import Modal from "../components/docshare/Modal";
-import { useState } from "react";
+import UserConnections from "../components/docshare/UserConnections";
 import { useParams, Link } from "react-router-dom";
-import toast from "react-hot-toast";
-import axiosClient from "../api/axiosClient";
 import Spinner from "../components/Spinner";
 import {
   FILE_ICONS,
@@ -19,46 +16,6 @@ function UserProfile() {
   const { data, loading, error, retry } = useRemoteData(
     `/documents/user/${userId}`,
   );
-  const {
-    data: followStatus = { followers: 0, following: 0, isFollowing: false },
-    setData: setFollowStatus,
-    error: followError,
-    loading: followLoading,
-    retry: retryFollow,
-  } = useRemoteData(`/follow/${userId}/status`);
-  const [followModal, setFollowModal] = useState(null); // 'followers' | 'following'
-  const [followList, setFollowList] = useState([]);
-  const isAuthenticated = !!localStorage.getItem("token");
-  const currentUserId = parseInt(localStorage.getItem("userId") || "0");
-
-  const handleToggleFollow = async () => {
-    if (!isAuthenticated) {
-      toast.error("Vui lòng đăng nhập!");
-      return;
-    }
-    try {
-      const res = await axiosClient.post(`/follow/${userId}`);
-      setFollowStatus((s) => ({
-        ...s,
-        isFollowing: res.data.isFollowing,
-        followers: s.followers + (res.data.isFollowing ? 1 : -1),
-      }));
-      toast.success(res.data.message);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi!");
-    }
-  };
-
-  const openFollowModal = async (type) => {
-    try {
-      const res = await axiosClient.get(`/follow/${userId}/${type}`);
-      setFollowList(res.data);
-      setFollowModal(type);
-    } catch {
-      toast.error("Lỗi!");
-    }
-  };
-
   if (loading) return <Spinner />;
   if (error) return <ErrorState error={error} onRetry={retry} />;
   if (!data)
@@ -105,14 +62,17 @@ function UserProfile() {
         <div
           style={{
             background: "#fff",
-            padding: "0 32px 24px",
+            padding: "0 20px 24px",
+            flexWrap: "wrap",
             display: "flex",
             gap: "20px",
-            alignItems: "flex-end",
+            alignItems: "flex-start",
           }}
         >
           <div
             style={{
+              position: "relative",
+              zIndex: 1,
               width: "80px",
               height: "80px",
               borderRadius: "50%",
@@ -144,7 +104,7 @@ function UserProfile() {
               user.name.charAt(0).toUpperCase()
             )}
           </div>
-          <div style={{ flex: 1, paddingBottom: "4px" }}>
+          <div style={{ flex: 1, minWidth: 0, paddingTop: "12px", paddingBottom: "4px" }}>
             <h2
               style={{
                 margin: "0 0 4px",
@@ -162,75 +122,7 @@ function UserProfile() {
               {new Date(user.created_at).toLocaleDateString("vi-VN")} · 📄{" "}
               {documents.length} tài liệu
             </p>
-            {followError ? (
-              <ErrorState error={followError} onRetry={retryFollow} />
-            ) : followLoading ? (
-              <Spinner />
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  onClick={() => openFollowModal("followers")}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "#3b82f6",
-                    fontWeight: "bold",
-                    fontSize: "13px",
-                    padding: 0,
-                  }}
-                >
-                  {followStatus.followers} người theo dõi
-                </button>
-                <span style={{ color: "#e2e8f0" }}>·</span>
-                <button
-                  onClick={() => openFollowModal("following")}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "#3b82f6",
-                    fontWeight: "bold",
-                    fontSize: "13px",
-                    padding: 0,
-                  }}
-                >
-                  đang theo dõi {followStatus.following}
-                </button>
-                {isAuthenticated &&
-                  String(userId) !== String(currentUserId) && (
-                    <button
-                      onClick={handleToggleFollow}
-                      style={{
-                        padding: "6px 18px",
-                        borderRadius: "20px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontWeight: "bold",
-                        fontSize: "13px",
-                        background: followStatus.isFollowing
-                          ? "#fee2e2"
-                          : "linear-gradient(135deg, #3b82f6, #06b6d4)",
-                        color: followStatus.isFollowing ? "#b91c1c" : "#fff",
-                        boxShadow: followStatus.isFollowing
-                          ? "none"
-                          : "0 2px 8px rgba(59,130,246,0.35)",
-                      }}
-                    >
-                      {followStatus.isFollowing
-                        ? "✕ Bỏ theo dõi"
-                        : "+ Theo dõi"}
-                    </button>
-                  )}
-              </div>
-            )}
+            <UserConnections key={userId} userId={userId} />
           </div>
         </div>
       </div>
@@ -263,7 +155,7 @@ function UserProfile() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
             gap: "16px",
           }}
         >
@@ -353,104 +245,7 @@ function UserProfile() {
         </div>
       )}
 
-      {/* MODAL FOLLOWERS / FOLLOWING */}
-      {followModal && (
-        <Modal
-          title={
-            followModal === "followers" ? "Người theo dõi" : "Đang theo dõi"
-          }
-          onClose={() => setFollowModal(null)}
-        >
-          <div
-            style={{
-              overflowY: "auto",
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            {followList.length === 0 ? (
-              <p
-                style={{
-                  textAlign: "center",
-                  color: "#94a3b8",
-                  padding: "20px 0",
-                  fontSize: "14px",
-                }}
-              >
-                Chưa có ai.
-              </p>
-            ) : (
-              followList.map((u) => (
-                <Link
-                  key={u.id}
-                  to={`/users/${u.id}`}
-                  onClick={() => setFollowModal(null)}
-                  style={{
-                    textDecoration: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px",
-                    borderRadius: "10px",
-                    background: "#f8fafc",
-                    transition: "0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#e0f2fe")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#f8fafc")
-                  }
-                >
-                  <div
-                    style={{
-                      width: "40px",
-                      height: "40px",
-                      borderRadius: "50%",
-                      overflow: "hidden",
-                      background: "#cbd5e1",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#fff",
-                      fontWeight: "bold",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {u.avatar_url ? (
-                      <img
-                        src={
-                          u.avatar_url.startsWith("https://")
-                            ? u.avatar_url
-                            : `${API_URL}${u.avatar_url}`
-                        }
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      u.name.charAt(0).toUpperCase()
-                    )}
-                  </div>
-                  <span
-                    style={{
-                      fontWeight: "bold",
-                      color: "#1a1a1a",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {u.name}
-                  </span>
-                </Link>
-              ))
-            )}
-          </div>
-        </Modal>
-      )}
+
     </div>
   );
 }

@@ -37,7 +37,7 @@ async function browser() {
   const server = await preview({ root: front, preview: { host: '127.0.0.1', port: 4174, strictPort: true } });
   try {
     const env = { ...process.env, TEST_BASE_URL: 'http://127.0.0.1:4174' };
-    for (const suite of ['docshare-ui', 'ux-improvements', 'chat-history', 'covers-mobile', 'stability', 'web-search', 'collections']) {
+    for (const suite of ['docshare-ui', 'ux-improvements', 'chat-history', 'covers-mobile', 'stability', 'web-search', 'collections', 'follows']) {
       await run(process.execPath, [`test/${suite}.browser.cjs`], front, env);
     }
   } finally { await new Promise(resolve => server.httpServer.close(resolve)); }

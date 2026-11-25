@@ -118,3 +118,10 @@ Kết quả lượt bổ sung: test:database PASS; test:security FAIL vì depend
 - `CHROME_PATH=/usr/bin/google-chrome npm run test:browser` chạy thêm `frontend/test/collections.browser.cjs` sau các suite cũ. Có thể bỏ CHROME_PATH khi đã cài Chromium của Playwright. Suite mới mock toàn bộ API, kiểm tra thao tác bộ sưu tập, mine/saved, trang chi tiết, retry và desktop/tablet/mobile.
 - Migration `20261125090000_collections` đã áp vào database cấu hình hiện tại ngày25/11/2026; khi triển khai môi trường khác vẫn cần áp migrations và generate Prisma Client theo quy trình hiện có.
 - Thử thủ công: restart backend/frontend, vào `/collections`, tạo bộ riêng tư; thêm tài liệu của tôi/đã lưu, đổi thứ tự, tải lại; đổi công khai và mở liên kết bằng khách/tài khoản khác. Tài liệu chưa duyệt của chủ sở hữu không được xuất hiện cho khách. Xóa bộ không được xóa tài liệu gốc hoặc bỏ lưu tài liệu.
+
+### Theo dõi người dùng / bộ sưu tập (25/11/2026)
+
+- `npm run test:database` chạy thêm `backend/test/follows.integration.js` trên database tạm: identity/self, counts, idempotency/concurrency, quan hệ độc lập, privacy/cascade và follow chờ lock khi bộ chuyển riêng tư. Fixture giữ một CollectionFollow để dump/restore kiểm tra dữ liệu thật của bảng mới.
+- `npm run test:browser` / `npm run test:all` chạy thêm `frontend/test/follows.browser.cjs`. Mọi API được mock; gồm hai loại hồ sơ, follow-back/unfollow, số lượng sau reload, lỗi/retry, khóa nút khi pending, tab bộ theo dõi và bộ riêng tư, guest/mobile.
+- Migration `20261125110000_collection_follows` đã áp vào DB cấu hình ngày25/11/2026. Môi trường khác cần chạy migration khi deploy backend, không cần env mới.
+- Thử thủ công bằng hai tài khoản: A theo dõi B → hồ sơ A có B ở Đang theo dõi; hồ sơ B có A ở Người theo dõi. B theo dõi lại A rồi bỏ theo dõi, kiểm tra số lượng và reload. A theo dõi bộ công khai của B → xem ở `/collections?tab=following`; B chuyển PRIVATE → A chỉ thấy thông báo không còn công khai và có thể bỏ theo dõi; B xóa bộ → dòng tự biến mất sau tải lại. Theo dõi bộ không thay đổi quan hệ theo dõi B.

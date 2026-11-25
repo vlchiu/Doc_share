@@ -154,6 +154,7 @@ exports.read = wrap(async (req, res) => {
   res.json({
     ...collection,
     is_owner: collection.user_id === req.user?.userId,
+    is_following: req.user ? !!(await prisma.collectionFollow.findUnique({ where: { user_id_collection_id: { user_id: req.user.userId, collection_id: collection.id } } })) : false,
 
     items: items.map(item => ({
       position: item.position,
@@ -341,4 +342,40 @@ exports.moveItem = wrap(async (req, res) => {
   res.json({
     message: 'Đã sắp xếp tài liệu.'
   });
+});
+
+
+exports.following = wrap(async (req, res) => {
+  const rows = await prisma.collectionFollow.findMany({
+    where: { user_id: req.user.userId },
+    orderBy: [{ created_at: 'desc' }, { collection_id: 'desc' }],
+    select: { collection: { select: {
+      id: true, visibility: true, name: true, description: true,
+      user: { select: { id: true, name: true } },
+      _count: { select: { items: { where: { document: readableWhere(req.user) } } } },
+    } } },
+  });
+  // Never serialize the name, description, owner or document count of a private collection.
+  res.json(rows.map(({ collection }) => collection.visibility === 'PUBLIC'
+    ? { ...collection, available: true }
+    : { id: collection.id, available: false }));
+});
+exports.follow = wrap(async (req, res) => {
+  const id = idOf(req.params.id), userId = req.user.userId;
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "Collection" WHERE id = ${id} FOR UPDATE`;
+    const c = await tx.collection.findUnique({ where: { id } });
+    if (!c || c.visibility !== 'PUBLIC') throw fail(404, 'Không tìm thấy bộ sưu tập công khai.');
+    if (c.user_id === userId) throw fail(400, 'Bộ sưu tập của bạn đã có trong mục Của tôi.');
+    await tx.collectionFollow.upsert({
+      where: { user_id_collection_id: { user_id: userId, collection_id: id } },
+      create: { user_id: userId, collection_id: id }, update: {},
+    });
+  });
+  res.json({ is_following: true, message: 'Đã theo dõi bộ sưu tập.' });
+});
+exports.unfollow = wrap(async (req, res) => {
+  const id = idOf(req.params.id);
+  await prisma.collectionFollow.deleteMany({ where: { user_id: req.user.userId, collection_id: id } });
+  res.json({ is_following: false, message: 'Đã bỏ theo dõi bộ sưu tập.' });
 });
