@@ -111,3 +111,10 @@ Sau đó `npm run test:staging`. Script chỉ đọc API (GET chi tiết có th�
 - Load test, log cảnh báo, tối ưu phân trang quản trị: vẫn cần thực hiện riêng.
 
 Kết quả lượt bổ sung: test:database PASS; test:security FAIL vì dependency có high/critical và Git theo dõi backup.sql/frontend/.env/frontend/.env.production. Flag env theo tên tệp không khẳng định mọi tệp đó chứa secret; cần rà nội dung an toàn. Không tự xóa dữ liệu hoặc sửa lịch sử Git. Các lệnh mới chạy riêng, không âm thầm đòi PostgreSQL/mạng hoặc staging trong test:all/CI hiện có.
+
+### Bộ sưu tập tài liệu (25/11/2026)
+
+- `npm run test:database` tự áp toàn bộ migrations trên PostgreSQL tạm và chạy `backend/test/collections.integration.js`; không dùng DATABASE_URL thật. Bao gồm owner/stranger/anonymous, public/private, thêm trùng/đồng thời, đổi thứ tự, lọc tài liệu mất quyền và xóa bộ không xóa tài liệu.
+- `CHROME_PATH=/usr/bin/google-chrome npm run test:browser` chạy thêm `frontend/test/collections.browser.cjs` sau các suite cũ. Có thể bỏ CHROME_PATH khi đã cài Chromium của Playwright. Suite mới mock toàn bộ API, kiểm tra thao tác bộ sưu tập, mine/saved, trang chi tiết, retry và desktop/tablet/mobile.
+- Migration `20261125090000_collections` đã áp vào database cấu hình hiện tại ngày25/11/2026; khi triển khai môi trường khác vẫn cần áp migrations và generate Prisma Client theo quy trình hiện có.
+- Thử thủ công: restart backend/frontend, vào `/collections`, tạo bộ riêng tư; thêm tài liệu của tôi/đã lưu, đổi thứ tự, tải lại; đổi công khai và mở liên kết bằng khách/tài khoản khác. Tài liệu chưa duyệt của chủ sở hữu không được xuất hiện cho khách. Xóa bộ không được xóa tài liệu gốc hoặc bỏ lưu tài liệu.

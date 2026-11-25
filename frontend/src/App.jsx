@@ -34,6 +34,8 @@ const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 import axiosClient from "./api/axiosClient";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppShell from "./components/docshare/AppShell";
+const Collections = lazy(() => import("./pages/Collections"));
+const CollectionDetail = lazy(() => import("./pages/CollectionDetail"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 
 function AppLayout({ user, refreshUser }) {
@@ -43,6 +45,8 @@ function AppLayout({ user, refreshUser }) {
     <RouteBoundary key={location.pathname}>
       <Suspense fallback={<LoadingState label="Đang mở trang…" />}>
         <Routes>
+          <Route path="/collections" element={<ProtectedRoute user={user}><Collections /></ProtectedRoute>} />
+          <Route path="/collections/:id" element={<CollectionDetail />} />
           <Route path="/help" element={<Help />} />
           <Route path="/support" element={<Support />} />
           <Route path="/terms" element={<Policy kind="terms" />} />

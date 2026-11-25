@@ -1,5 +1,18 @@
 export const guides = [
   {
+    id: "collections",
+    title: "Tổ chức bộ sưu tập tài liệu",
+    to: "/collections",
+    action: "Mở bộ sưu tập",
+    steps: [
+      "Tạo bộ sưu tập, nhập tên và mô tả. Bộ sưu tập mới mặc định riêng tư.",
+      "Bấm Thêm tài liệu để chọn từ tài liệu của tôi hoặc tài liệu đã lưu; cũng có thể thêm ngay trên trang chi tiết tài liệu.",
+      "Tìm theo tên hoặc mô tả; xóa từ khóa tìm kiếm để dùng nút lên/xuống sắp xếp tài liệu.",
+      "Đổi sang Công khai qua liên kết rồi sao chép liên kết để chia sẻ. Người xem chỉ thấy tài liệu họ có quyền đọc.",
+      "Bỏ tài liệu khỏi bộ sưu tập hoặc xóa bộ sưu tập không xóa tài liệu gốc và không bỏ lưu tài liệu.",
+    ],
+  },
+  {
     id: "account",
     title: "Tạo tài khoản và đăng nhập",
     to: "/register",

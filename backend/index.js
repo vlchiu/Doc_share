@@ -58,6 +58,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/auth', googleAuthRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/collections', require('./routes/collectionRoutes'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/follow', followRoutes);

@@ -38,6 +38,7 @@ model User {
   reports              Report[]
   conversations        Conversation[]
   usage_reservations   UsageReservation[]
+  collections          Collection[]
   saved_docs           SavedDocument[]
 }
 
@@ -75,6 +76,7 @@ model Document {
   ratings          Rating[]
   reports          Report[]
   conversations    Conversation[]
+  collection_items CollectionItem[]
   saved_by         SavedDocument[]
 }
 
@@ -230,4 +232,28 @@ model UsageReservation {
   created_at DateTime @default(now())
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   @@index([user_id, kind, day])
+}
+
+model Collection {
+  id Int @id @default(autoincrement())
+  user_id Int
+  name String @db.VarChar(120)
+  description String @default("") @db.VarChar(2000)
+  visibility String @default("PRIVATE") @db.VarChar(10)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  items CollectionItem[]
+  @@index([user_id, updated_at])
+}
+
+model CollectionItem {
+  collection_id Int
+  document_id Int
+  position Int
+  collection Collection @relation(fields: [collection_id], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  @@id([collection_id, document_id])
+  @@index([collection_id, position])
+  @@index([document_id])
 }

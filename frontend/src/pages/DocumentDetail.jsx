@@ -1,3 +1,4 @@
+import AddToCollection from "../components/docshare/AddToCollection";
 import CoverEditor from "../components/docshare/CoverEditor";
 import { ErrorState } from "../components/docshare/ResourceState";
 import { Panel } from "../components/docshare/Primitives";
@@ -498,6 +499,7 @@ function DocumentDetail() {
                     </ActionBtn>
                   )}
 
+                  <AddToCollection documentId={doc.id} />
                   <ActionBtn
                     onClick={handleShare}
                     className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"

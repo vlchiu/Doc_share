@@ -166,3 +166,18 @@ Xác nhận cuối quota: test:database exit0, gồm AI lỗi refund, retry thà
 ## Áp dụng migration quota theo xác nhận — 02/11/2026
 
 Local lỗi tải tài liệu: kiểm tra chỉ đọc xác nhận Document.file_size và UsageReservation chưa tồn tại, Prisma P2022. User đã đồng ý áp migration vào database cấu hình hiện tại (có thể dùng chung production). Kiểm tra chỉ có 20261102090000_account_quotas pending; prisma migrate deploy exit0. Sau đó truy vấn danh sách tài liệu kèm category/user và bảng quota thành công. Không sửa dữ liệu tài liệu, không bật quota, không push/deploy. Các ghi chú trước nói chưa áp dụng migration đã được thay thế bởi cập nhật này.
+
+## Bộ sưu tập tài liệu — 25/11/2026
+
+User yêu cầu triển khai Phần 1 của kế hoạch mở rộng đồ án. Working tree sạch khi bắt đầu; đã mở rộng backend/database theo phạm vi mới, giữ chức năng SavedDocument hiện có.
+
+- Collection/CollectionItem và migration `20261125090000_collections`: tên, mô tả, PRIVATE/PUBLIC, thứ tự tài liệu, FK cascade chỉ xóa liên kết khi xóa bộ sưu tập/tài liệu. Không xóa tài liệu gốc khi xóa bộ sưu tập.
+- API `/api/collections`: GET danh sách của tôi, POST tạo; GET/PUT/DELETE `/:id`; POST `/:id/items`; DELETE/PATCH `/:id/items/:documentId` (PATCH direction up/down). GET chi tiết hỗ trợ q tìm tên/mô tả. Kiểm tra độ dài/ID/visibility; response no-store; lỗi database không lộ chi tiết.
+- Chỉ chủ sở hữu được chỉnh sửa, kể cả admin không tự có quyền sửa bộ riêng của người khác. Riêng tư trả404 cho người ngoài/khách. Công khai qua liên kết không tự cấp quyền tài liệu; dùng readableWhere/publicDocument hiện có, ẩn tài liệu xóa/gỡ/không được phép xem và không trả file_url. Số tài liệu trên danh sách chỉ đếm tài liệu người dùng đọc được.
+- Mutation khóa hàng Collection trong transaction để serialize thêm/sắp xếp/xóa; thêm trùng idempotent qua khóa ghép. Khi tài liệu bị thu hồi quyền, lần đọc tiếp theo lọc lại quyền.
+- Frontend lazy routes `/collections`, `/collections/:id`; navigation sidebar/account, form tạo/sửa, xác nhận xóa, chọn tài liệu mine/saved, tìm cục bộ theo tên/mô tả, lên/xuống (tắt khi đang lọc), sao chép liên kết công khai; thêm từ trang chi tiết tài liệu và tạo nhanh bộ mới. Dialog/loading/error/retry dùng component hiện có. Hướng dẫn Help cập nhật.
+- Validation: backend115/115 và poller3/3, frontend lint/build đạt; sáu browser regression cũ đạt. Suite mới `collections.browser.cjs` đạt CRUD, chọn mine/saved, thêm từ chi tiết, sắp xếp/reload, tìm kiếm, đổi công khai, xóa, retry và1440/768/375px; đã xem ảnh mobile không tràn ngang. Browser dùng API mock, không gọi provider thật.
+- `npm run test:database` đạt trên PostgreSQL14 tạm: kiểm thử owner/stranger/anonymous, public/private, lọc quyền, concurrent/idempotent add, move, search, trash/admin removal, count và safe delete; các test quota/payment hiện có và backup/restore17 bảng đạt. Các bảng collection rỗng ở thời điểm dump của fixture sau kiểm thử xóa; không coi đây là kiểm thử restore nội dung bộ sưu tập thực tế.
+- Prisma Client đã generate. Sau xác nhận escalation, đã kiểm tra database cấu hình chỉ có migration collection đang chờ và áp dụng thành công; SELECT schema hai bảng mới đạt. Không sửa tài liệu hiện có, không tạo dữ liệu mẫu trên DB thật. Không in cấu hình/kết nối/bí mật.
+- Chưa push/deploy hoặc restart tiến trình backend đang chạy của người dùng. Cần chạy backend source mới (ví dụ restart `npm run dev`) để nhận route mới. Không làm nhóm học tập/AI RAG/ôn tập trong Phần1.
+- Giới hạn: công khai qua liên kết, chưa có trang khám phá bộ công khai; danh sách bộ sưu tập và nội dung tải toàn bộ, chưa phân trang. Không có ghi chú riêng từng tài liệu ở phần này. Không thay đổi chính sách quyền tài liệu hiện có.

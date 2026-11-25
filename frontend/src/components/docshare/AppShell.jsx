@@ -15,6 +15,7 @@ import {
   ChevronDown,
   LogOut,
   Bookmark,
+  FolderOpen,
   UploadCloud,
   Download,
   Trash2,
@@ -25,6 +26,7 @@ import NotificationBell from "../NotificationBell";
 const items = [
   ["/", "Trang chủ", Home],
   ["/documents", "Tài liệu", FileText],
+  ["/collections", "Bộ sưu tập", FolderOpen],
   ["/ai-chat", "AI Chat", MessageCircle],
   ["/web-search", "Web Search", Globe],
   ["/vip", "VIP", Crown],
@@ -214,6 +216,7 @@ export default function AppShell({ user, children }) {
                       ["/profile", "Hồ sơ", User],
                       ["/my-documents", "Tài liệu của tôi", FileText],
                       ["/saved-documents", "Tài liệu đã lưu", Bookmark],
+                      ["/collections", "Bộ sưu tập", FolderOpen],
                       ["/download-history", "Lịch sử tải xuống", Download],
                       ["/trash", "Thùng rác", Trash2],
                     ].map(([to, label, Icon]) => {
